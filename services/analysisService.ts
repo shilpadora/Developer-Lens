@@ -3,6 +3,7 @@ import { AnalysisResult, FileNode } from "../types";
 
 export class AnalysisService {
   static async analyze(repoName: string, tree: FileNode[]): Promise<AnalysisResult> {
+    // Initializing with the required named parameter
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
     const summary = this.getSummary(tree).join(', ');
@@ -41,7 +42,13 @@ export class AnalysisService {
       }
     });
 
-    const result = JSON.parse(response.text || '{}');
+    // Accessing .text property directly as per guidelines
+    const textOutput = response.text;
+    if (!textOutput) {
+      throw new Error("Empty response from AI");
+    }
+
+    const result = JSON.parse(textOutput);
     const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks?.map((c: any) => ({
       title: c.web?.title || 'Documentation',
       uri: c.web?.uri || '#'
