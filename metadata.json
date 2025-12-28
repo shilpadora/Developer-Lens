@@ -1,0 +1,5 @@
+{
+  "name": "Developer Lens",
+  "description": "A high-fidelity developer tool for visualizing repository structure, database schemas, git analytics, and AI-powered architectural insights.",
+  "requestFramePermissions": []
+}
