@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import * as d3 from 'd3';
-import { FileNode } from '../types.ts';
+import { FileNode } from '../types';
 
 const TopologyMap: React.FC<{ data: FileNode[] }> = ({ data }) => {
   const svgRef = useRef<SVGSVGElement>(null);
@@ -64,6 +64,7 @@ const TopologyMap: React.FC<{ data: FileNode[] }> = ({ data }) => {
     svg.call(zoom.transform, d3.zoomIdentity.translate(80, 50).scale(0.7));
 
     const ro = new ResizeObserver(() => {
+      if (!container) return;
       const w = container.clientWidth;
       const h = container.clientHeight;
       svg.attr("width", w).attr("height", h);

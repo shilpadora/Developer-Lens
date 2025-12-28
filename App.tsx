@@ -3,14 +3,14 @@ import {
   Plus, Github, RefreshCw, LayoutDashboard, Share2, Database, BarChart3, Zap, 
   Search, X, Trash2, Key, Terminal, Code2, Layers, Cpu, ShieldCheck, ExternalLink
 } from 'lucide-react';
-import { RepoProject, FileNode, ViewType, GitStats, Entity, AnalysisResult } from './types.ts';
-import { GitHubService } from './services/githubService.ts';
-import { ParserService } from './services/parserService.ts';
-import { AnalysisService } from './services/analysisService.ts';
-import TopologyMap from './components/TopologyMap.tsx';
-import StatsDashboard from './components/StatsDashboard.tsx';
-import SchemaGrid from './components/SchemaGrid.tsx';
-import InsightsPanel from './components/InsightsPanel.tsx';
+import { RepoProject, FileNode, ViewType, GitStats, Entity, AnalysisResult } from './types';
+import { GitHubService } from './services/githubService';
+import { ParserService } from './services/parserService';
+import { AnalysisService } from './services/analysisService';
+import TopologyMap from './components/TopologyMap';
+import StatsDashboard from './components/StatsDashboard';
+import SchemaGrid from './components/SchemaGrid';
+import InsightsPanel from './components/InsightsPanel';
 
 const App: React.FC = () => {
   const [projects, setProjects] = useState<RepoProject[]>([]);
@@ -30,8 +30,15 @@ const App: React.FC = () => {
   const activeProject = useMemo(() => projects.find(p => p.id === activeId), [projects, activeId]);
 
   useEffect(() => {
-    const saved = localStorage.getItem('dl_projects');
-    if (saved) setProjects(JSON.parse(saved));
+    try {
+      const saved = localStorage.getItem('dl_projects');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) setProjects(parsed);
+      }
+    } catch (e) {
+      console.error("Failed to load projects from storage", e);
+    }
   }, []);
 
   const save = (list: RepoProject[]) => {
@@ -43,9 +50,9 @@ const App: React.FC = () => {
     setLoading(true);
     setActiveId(p.id);
     try {
-      const t = await GitHubService.fetchTree(p.owner, p.name, p.token);
+      const { tree: t, defaultBranch } = await GitHubService.fetchTree(p.owner, p.name, p.token);
       setTree(t);
-      const s = await GitHubService.fetchStats(p.owner, p.name, p.token);
+      const s = await GitHubService.fetchStats(p.owner, p.name, defaultBranch, p.token);
       setStats(s);
 
       // Simple heuristic for schema detection
@@ -66,7 +73,7 @@ const App: React.FC = () => {
       setAiData(null); // Reset AI for new project
     } catch (e) {
       console.error(e);
-      alert('Sync failed');
+      alert('Sync failed. Please check repository visibility and your token.');
     } finally {
       setLoading(false);
     }
@@ -75,8 +82,8 @@ const App: React.FC = () => {
   const handleImport = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const data = new FormData(e.currentTarget);
-    const url = data.get('url') as string;
-    const token = data.get('token') as string;
+    const url = (data.get('url') as string).trim();
+    const token = (data.get('token') as string)?.trim();
     const match = url.match(/github\.com\/([^/]+)\/([^/]+)/);
     if (!match) return alert('Invalid GitHub URL');
 
@@ -101,7 +108,8 @@ const App: React.FC = () => {
       const res = await AnalysisService.analyze(activeProject.name, tree);
       setAiData(res);
     } catch (e) {
-      alert('AI audit failed');
+      console.error(e);
+      alert('AI audit failed. Ensure your API key is configured.');
     } finally {
       setAiLoading(false);
     }

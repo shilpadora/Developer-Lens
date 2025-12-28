@@ -1,9 +1,8 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { AnalysisResult, FileNode } from "../types.ts";
+import { AnalysisResult, FileNode } from "../types";
 
 export class AnalysisService {
   static async analyze(repoName: string, tree: FileNode[]): Promise<AnalysisResult> {
-    // Fixed: Always use exactly process.env.API_KEY for initialization as required.
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
     const summary = this.getSummary(tree).join(', ');
@@ -42,7 +41,6 @@ export class AnalysisService {
       }
     });
 
-    // Directly access .text property as required. Note that Search results might impact JSON parsing if not strictly adhered by model.
     const result = JSON.parse(response.text || '{}');
     const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks?.map((c: any) => ({
       title: c.web?.title || 'Documentation',

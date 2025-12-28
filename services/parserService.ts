@@ -1,4 +1,4 @@
-import { Entity, FileNode, AnalysisResult } from '../types.ts';
+import { Entity, FileNode, AnalysisResult } from '../types';
 
 export class ParserService {
   static parseSchema(content: string, type: 'prisma' | 'python'): Entity[] {

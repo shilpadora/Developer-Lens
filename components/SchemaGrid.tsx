@@ -1,5 +1,5 @@
 import React from 'react';
-import { Entity } from '../types.ts';
+import { Entity } from '../types';
 import { Database, Link2 } from 'lucide-react';
 
 const SchemaGrid: React.FC<{ entities: Entity[] }> = ({ entities }) => {

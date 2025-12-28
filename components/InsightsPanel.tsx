@@ -1,5 +1,5 @@
 import React from 'react';
-import { AnalysisResult } from '../types.ts';
+import { AnalysisResult } from '../types';
 import { ShieldCheck, Cpu, Layers, ExternalLink, Search, Sparkles } from 'lucide-react';
 
 const InsightsPanel: React.FC<{ data: AnalysisResult | null, loading: boolean }> = ({ data, loading }) => {

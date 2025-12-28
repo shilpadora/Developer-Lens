@@ -1,4 +1,4 @@
-import { FileNode, GitStats } from '../types.ts';
+import { FileNode, GitStats } from '../types';
 
 export class GitHubService {
   private static getHeaders(token?: string) {
@@ -9,11 +9,11 @@ export class GitHubService {
     return headers;
   }
 
-  static async fetchTree(owner: string, repo: string, token?: string): Promise<FileNode[]> {
-    const branchUrl = `https://api.github.com/repos/${owner}/${repo}`;
-    const branchRes = await fetch(branchUrl, { headers: this.getHeaders(token) });
-    if (!branchRes.ok) throw new Error('Repository not found');
-    const repoData = await branchRes.json();
+  static async fetchTree(owner: string, repo: string, token?: string): Promise<{ tree: FileNode[], defaultBranch: string }> {
+    const repoUrl = `https://api.github.com/repos/${owner}/${repo}`;
+    const repoRes = await fetch(repoUrl, { headers: this.getHeaders(token) });
+    if (!repoRes.ok) throw new Error('Repository not found');
+    const repoData = await repoRes.json();
     const defaultBranch = repoData.default_branch || 'main';
 
     const url = `https://api.github.com/repos/${owner}/${repo}/git/trees/${defaultBranch}?recursive=1`;
@@ -21,7 +21,7 @@ export class GitHubService {
     if (!response.ok) throw new Error('Failed to fetch tree');
     
     const data = await response.json();
-    return this.buildHierarchy(data.tree);
+    return { tree: this.buildHierarchy(data.tree), defaultBranch };
   }
 
   private static buildHierarchy(tree: any[]): FileNode[] {
@@ -73,11 +73,11 @@ export class GitHubService {
     return 'low';
   }
 
-  static async fetchStats(owner: string, repo: string, token?: string): Promise<GitStats> {
+  static async fetchStats(owner: string, repo: string, branch: string, token?: string): Promise<GitStats> {
     const [commitsRes, contributorsRes, treeRes] = await Promise.all([
       fetch(`https://api.github.com/repos/${owner}/${repo}/stats/commit_activity`, { headers: this.getHeaders(token) }),
       fetch(`https://api.github.com/repos/${owner}/${repo}/stats/contributors`, { headers: this.getHeaders(token) }),
-      fetch(`https://api.github.com/repos/${owner}/${repo}/git/trees/main?recursive=1`, { headers: this.getHeaders(token) })
+      fetch(`https://api.github.com/repos/${owner}/${repo}/git/trees/${branch}?recursive=1`, { headers: this.getHeaders(token) })
     ]);
 
     let commits = [];
@@ -118,7 +118,6 @@ export class GitHubService {
     const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${path}`, { headers: this.getHeaders(token) });
     if (!res.ok) return '';
     const data = await res.json();
-    // GitHub API returns base64 with potential newlines.
     const cleanBase64 = data.content.replace(/\s/g, '');
     try {
         return decodeURIComponent(escape(atob(cleanBase64)));

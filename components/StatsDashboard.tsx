@@ -3,7 +3,7 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   BarChart, Bar, Cell, PieChart, Pie
 } from 'recharts';
-import { GitStats } from '../types.ts';
+import { GitStats } from '../types';
 import { Activity, Code2, Users2 } from 'lucide-react';
 
 const StatsDashboard: React.FC<{ stats: GitStats }> = ({ stats }) => {
