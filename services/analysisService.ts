@@ -1,16 +1,19 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
-import { AnalysisResult, FileNode } from "../types";
+import { AnalysisResult, FileNode } from "../types.ts";
 
 export class AnalysisService {
-  static async analyzeRepo(repoName: string, tree: FileNode[]): Promise<AnalysisResult> {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+  static async analyze(repoName: string, tree: FileNode[]): Promise<AnalysisResult> {
+    // Fixed: Always use exactly process.env.API_KEY for initialization as required.
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
-    const fileList = this.getSummary(tree).join(', ');
-    const prompt = `Perform a high-level developer lens analysis on this repository: ${repoName}. 
-    The file structure summary is: ${fileList}. 
-    Focus on code patterns, likely architecture, and potential performance bottlenecks based on common stacks. 
-    Use Google Search to cross-reference common issues with this specific tech stack if applicable.`;
+    const summary = this.getSummary(tree).join(', ');
+    const prompt = `Analyze this project structure: ${repoName}. Files: ${summary}.
+    Provide a high-fidelity code audit including:
+    1. Performance analysis.
+    2. Architectural patterns identified.
+    3. Code quality assessment.
+    Also identify the tech stack.
+    Use Google Search to find related best practices or known issues for this stack.`;
 
     const response = await ai.models.generateContent({
       model: 'gemini-3-pro-preview',
@@ -39,25 +42,18 @@ export class AnalysisService {
       }
     });
 
-    const data = JSON.parse(response.text || '{}');
-    const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks?.map((chunk: any) => ({
-      title: chunk.web?.title || 'External Resource',
-      uri: chunk.web?.uri || '#'
+    // Directly access .text property as required. Note that Search results might impact JSON parsing if not strictly adhered by model.
+    const result = JSON.parse(response.text || '{}');
+    const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks?.map((c: any) => ({
+      title: c.web?.title || 'Documentation',
+      uri: c.web?.uri || '#'
     })) || [];
 
-    return {
-      ...data,
-      sources
-    };
+    return { ...result, sources };
   }
 
   private static getSummary(nodes: FileNode[], depth = 0): string[] {
-    if (depth > 2) return [];
-    let list: string[] = [];
-    nodes.forEach(n => {
-      list.push(n.name);
-      if (n.children) list.push(...this.getSummary(n.children, depth + 1));
-    });
-    return list.slice(0, 50); // Limit to 50 entries for prompt
+    if (depth > 1) return [];
+    return nodes.map(n => n.name).slice(0, 30);
   }
 }

@@ -6,7 +6,6 @@ export interface RepoProject {
   url: string;
   lastSync: number;
   token?: string;
-  description?: string;
 }
 
 export interface FileNode {
@@ -42,4 +41,4 @@ export interface AnalysisResult {
   sources: Array<{ title: string; uri: string }>;
 }
 
-export type ViewType = 'mindmap' | 'er' | 'analytics' | 'insights' | 'stack';
+export type ViewType = 'topology' | 'schema' | 'analytics' | 'insights';
