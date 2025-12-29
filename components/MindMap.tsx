@@ -30,7 +30,7 @@ const MindMap: React.FC<Props> = ({ data, project, onNodeSelect }) => {
       .on("zoom", (e) => g.attr("transform", e.transform));
     svg.call(zoom);
 
-    const rootData: FileNode = { name: project?.name || "Repository", path: "root", type: "tree", complexity: "low", children: data };
+    const rootData: FileNode = { name: project?.name || "Repository", path: "root", type: "tree", kind: 'folder', complexity: "low", children: data };
     const root = d3.hierarchy<FileNode>(rootData);
 
     root.descendants().forEach(d => {
@@ -77,11 +77,12 @@ const MindMap: React.FC<Props> = ({ data, project, onNodeSelect }) => {
         e.stopPropagation();
         onNodeSelect(d.data);
 
-        if (d.data.type === 'tree') {
+        // Files or Folders can expand
+        if (d.data.kind === 'folder' || d.data.kind === 'class') {
           if (d.children) { d._children = d.children; d.children = undefined; }
           else { d.children = d._children; d._children = undefined; }
           update(d);
-        } else if (d.data.type === 'blob' && project) {
+        } else if (d.data.kind === 'file' && project) {
           if (d.children || d._children) {
             if (d.children) { d._children = d.children; d.children = undefined; }
             else { d.children = d._children; d._children = undefined; }
@@ -104,17 +105,27 @@ const MindMap: React.FC<Props> = ({ data, project, onNodeSelect }) => {
 
       nodeEnter.each(function(d) {
         const el = d3.select(this);
-        const type = d.data.type;
+        const kind = d.data.kind || (d.data.type === 'tree' ? 'folder' : 'file');
         const complexityColor = d.data.complexity === 'high' ? '#ef4444' : d.data.complexity === 'medium' ? '#f59e0b' : '#10b981';
 
-        if (type === 'tree') {
+        if (kind === 'folder') {
           el.append("path")
             .attr("d", "M-15,-11 L-15,11 L15,11 L15,-6 L4,-6 L0,-11 Z")
-            .attr("fill", complexityColor).attr("fill-opacity", 0.25).attr("stroke", complexityColor).attr("stroke-width", 2);
-        } else {
+            .attr("fill", complexityColor).attr("fill-opacity", 0.2).attr("stroke", complexityColor).attr("stroke-width", 2);
+        } else if (kind === 'file') {
           el.append("path")
             .attr("d", "M-10,-13 L6,-13 L10,-9 L10,13 L-10,13 Z")
-            .attr("fill", complexityColor).attr("fill-opacity", 0.25).attr("stroke", complexityColor).attr("stroke-width", 2);
+            .attr("fill", complexityColor).attr("fill-opacity", 0.1).attr("stroke", complexityColor).attr("stroke-width", 2);
+        } else if (kind === 'class') {
+          // Hexagon shape
+          el.append("path")
+            .attr("d", "M-12,0 L-6,-10 L6,-10 L12,0 L6,10 L-6,10 Z")
+            .attr("fill", "#3b82f6").attr("fill-opacity", 0.3).attr("stroke", "#3b82f6").attr("stroke-width", 2);
+        } else if (kind === 'function') {
+          // Oval (Ellipse) shape
+          el.append("ellipse")
+            .attr("rx", 15).attr("ry", 8)
+            .attr("fill", "#10b981").attr("fill-opacity", 0.3).attr("stroke", "#10b981").attr("stroke-width", 2);
         }
       });
 

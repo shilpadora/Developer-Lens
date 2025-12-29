@@ -16,6 +16,7 @@ export interface FileNode {
   name: string;
   path: string;
   type: 'blob' | 'tree';
+  kind?: 'folder' | 'file' | 'class' | 'function';
   complexity: 'low' | 'medium' | 'high';
   children?: FileNode[];
   size?: number;
@@ -52,7 +53,7 @@ export interface PeriodicMetric {
 }
 
 export interface GitStats {
-  commits: Array<{ date: string; count: number }>; // For the main chart
+  commits: Array<{ date: string; count: number }>;
   extensions: Record<string, number>;
   monthlyActivity: Array<{ month: string; commits: number }>;
   periods: {

@@ -1,5 +1,5 @@
 
-import { Entity, FileNode, AnalysisResult } from '../types';
+import { Entity, FileNode } from '../types';
 
 export class ParserService {
   static parseSchema(content: string, type: 'prisma' | 'python'): Entity[] {
@@ -20,7 +20,6 @@ export class ParserService {
       const indexes: string[] = [];
 
       body.split('\n').forEach(line => {
-        // Detect indexes/constraints
         if (line.includes('@@index') || line.includes('@@unique') || line.includes('@@id')) {
           indexes.push(line.trim());
           return;
@@ -116,6 +115,7 @@ export class ParserService {
             name: classMatch[1],
             path: `${fileName}/${classMatch[1]}`,
             type: 'tree',
+            kind: 'class',
             complexity: 'medium',
             children: []
           };
@@ -127,12 +127,13 @@ export class ParserService {
             name: methodMatch[1],
             path: `${currentClass.path}/${methodMatch[1]}`,
             type: 'blob',
+            kind: 'function',
             complexity: 'low'
           });
         }
         const topDefMatch = line.match(topDefRegex);
         if (topDefMatch) {
-          results.push({ name: topDefMatch[1], path: `${fileName}/${topDefMatch[1]}`, type: 'blob', complexity: 'low' });
+          results.push({ name: topDefMatch[1], path: `${fileName}/${topDefMatch[1]}`, type: 'blob', kind: 'function', complexity: 'low' });
         }
       });
     } else {
@@ -141,11 +142,11 @@ export class ParserService {
       lines.forEach((line) => {
         const classMatch = line.match(classRegex);
         if (classMatch) {
-          results.push({ name: classMatch[1], path: `${fileName}/${classMatch[1]}`, type: 'tree', complexity: 'medium', children: [] });
+          results.push({ name: classMatch[1], path: `${fileName}/${classMatch[1]}`, type: 'tree', kind: 'class', complexity: 'medium', children: [] });
         }
         const funcMatch = line.match(funcRegex);
         if (funcMatch && !line.includes('class ')) {
-          results.push({ name: funcMatch[1], path: `${fileName}/${funcMatch[1]}`, type: 'blob', complexity: 'low' });
+          results.push({ name: funcMatch[1], path: `${fileName}/${funcMatch[1]}`, type: 'blob', kind: 'function', complexity: 'low' });
         }
       });
     }

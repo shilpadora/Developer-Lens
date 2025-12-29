@@ -1,8 +1,7 @@
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   Plus, Github, RefreshCw, Share2, Database, BarChart3, 
-  X, Trash2, Terminal, ChevronRight, ChevronLeft, Search, Repeat, Lock, CheckCircle2, Layout, Shapes, ChevronUp, ChevronDown, ExternalLink
+  X, Trash2, Terminal, ChevronRight, ChevronLeft, Search, Repeat, Lock, CheckCircle2, Layout, Shapes, ChevronUp, ChevronDown, ExternalLink, Zap, Brain, Code, User
 } from 'lucide-react';
 import { RepoProject, FileNode, ViewType, GitStats, Entity, AnalysisResult } from './types';
 import { GitHubService } from './services/githubService';
@@ -174,10 +173,11 @@ const App: React.FC = () => {
 
   if (!launched) {
     return (
-      <div className="h-screen w-full flex flex-col items-center justify-center relative overflow-hidden bg-slate-950 px-6">
+      <div className="h-screen w-full flex flex-col items-center relative overflow-y-auto bg-slate-950 px-6 custom-scrollbar pb-20">
         <div className="blob top-0 left-0"></div>
         <div className="blob bottom-0 right-0" style={{ animationDelay: '-5s' }}></div>
-        <div className="z-10 text-center max-w-4xl space-y-4">
+        
+        <div className="z-10 text-center max-w-4xl space-y-4 pt-20">
           <LogoLarge />
           <h1 className="text-8xl font-black tracking-tighter uppercase leading-none text-slate-50">
             Developer <span className="text-emerald-500">Lens</span>
@@ -187,10 +187,22 @@ const App: React.FC = () => {
           </p>
           <div className="pt-8 flex flex-col items-center gap-4">
             <button onClick={() => setLaunched(true)} className="group bg-emerald-500 hover:bg-emerald-600 text-slate-950 px-12 py-5 rounded-2xl font-black text-xl uppercase tracking-widest transition-all hover:scale-105 shadow-[0_0_50px_rgba(16,185,129,0.3)] flex items-center gap-3">
-              Launch Intelligence <ChevronRight className="group-hover:translate-x-1 transition-transform" />
+              Enter Workspace <ChevronRight className="group-hover:translate-x-1 transition-transform" />
             </button>
-            <p className="text-[10px] text-slate-600 font-black uppercase tracking-[0.3em] opacity-50">v1.6 // Active Architectural Observer</p>
           </div>
+        </div>
+
+        <div className="z-10 w-full max-w-6xl grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pt-24">
+           <FeatureCard icon={<Share2 className="text-emerald-500" />} title="Mind Map Topology" desc="Navigate your codebase using an interactive D3 mind map. Deconstruct files into classes and functions with instant visual hierarchy." />
+           <FeatureCard icon={<Database className="text-blue-500" />} title="Database Schemas" desc="Auto-scan and visualize ER diagrams from Prisma, Django, and SQL models. Track relationships and foreign key mappings effortlessly." />
+           <FeatureCard icon={<Brain className="text-purple-500" />} title="AI Architecture Audit" desc="Get high-level structural audits powered by Gemini. Identify architectural debt, performance bottlenecks, and quality indices." />
+           <FeatureCard icon={<BarChart3 className="text-orange-500" />} title="Velocity Analytics" desc="Monitor commit momentum, file complexity trends, and contributor impact through high-fidelity visual dashboards." />
+           <FeatureCard icon={<Zap className="text-yellow-500" />} title="Intelligence Sidecar" desc="Deep dive into specific nodes with chat-based code intelligence. Ask Gemini about complex logic directly within the topology." />
+           <FeatureCard icon={<Github className="text-white" />} title="GitHub Integration" desc="Seamlessly import public or private repositories using Personal Access Tokens for comprehensive metadata synchronization." />
+        </div>
+        
+        <div className="mt-20 text-center">
+          <p className="text-[10px] text-slate-600 font-black uppercase tracking-[0.3em] opacity-50">Architectural Observer v1.9 // Google Gemini Integrated</p>
         </div>
       </div>
     );
@@ -201,8 +213,8 @@ const App: React.FC = () => {
       <nav className="w-20 border-r border-slate-800 flex flex-col items-center py-8 gap-10 bg-slate-950/80 backdrop-blur-xl z-50 shadow-2xl">
         <div 
           className="cursor-pointer hover:scale-110 transition-transform" 
-          onClick={() => { setActiveId(null); setView('stack'); }}
-          title="Home"
+          onClick={() => { setLaunched(false); setActiveId(null); setView('stack'); }}
+          title="Return to Landing"
         >
           <LogoIcon />
         </div>
@@ -220,9 +232,9 @@ const App: React.FC = () => {
       <main className="flex-1 flex flex-col min-w-0 bg-slate-950 relative">
         <header className="h-20 border-b border-slate-800 flex items-center justify-between px-10 bg-slate-950/50 backdrop-blur-md sticky top-0 z-40">
           <div className="flex items-center gap-4">
-             <div className="flex flex-col">
+             <div className="flex flex-col cursor-pointer hover:opacity-80 transition-opacity" onClick={() => { setLaunched(false); setActiveId(null); }}>
                <h1 className="text-lg font-black uppercase tracking-tight leading-none">Developer <span className="text-emerald-500">Lens</span></h1>
-               <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Architecture Observer</p>
+               <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Workspace Overview</p>
              </div>
           </div>
           
@@ -234,7 +246,7 @@ const App: React.FC = () => {
                   <span className="text-[9px] text-slate-600 font-mono tracking-wider opacity-60">@{activeProject.owner}</span>
                 </div>
                 <button 
-                  onClick={() => { setActiveId(null); setView('stack'); }} 
+                  onClick={() => { setActiveId(null); setView('stack'); setSelectedNode(null); }} 
                   className="px-3 py-2 bg-slate-800 hover:bg-emerald-500 hover:text-slate-950 rounded-xl text-[9px] font-black uppercase tracking-widest text-slate-400 transition-all flex items-center gap-2 group border border-slate-700 shadow-lg active:scale-95"
                 >
                   <Repeat size={12} className="group-hover:rotate-180 transition-transform duration-500" /> Switch Repo
@@ -289,7 +301,7 @@ const App: React.FC = () => {
                     <div className="w-64 h-1.5 bg-slate-900 rounded-full overflow-hidden border border-slate-800">
                       <div className="h-full bg-emerald-500 animate-[load_2s_infinite]"></div>
                     </div>
-                    <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 animate-pulse">Building Intelligence Overlay...</p>
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 animate-pulse">Building Intelligence Overlay...</p>
                   </div>
                 ) : (
                   <div className="h-full w-full relative">
@@ -304,7 +316,7 @@ const App: React.FC = () => {
           </div>
 
           {activeProject && view === 'topology' && (
-            <aside className={`flex-shrink-0 transition-all duration-500 ease-in-out border-l border-slate-800 bg-slate-900/30 backdrop-blur-3xl relative flex flex-col h-full z-20 ${panelMinimized ? 'w-14' : 'w-[20%] min-w-[340px]'}`}>
+            <aside className={`flex-shrink-0 transition-all duration-500 ease-in-out border-l border-slate-800 bg-slate-900/40 backdrop-blur-3xl relative flex flex-col h-full z-20 ${panelMinimized ? 'w-14' : 'w-[25%] min-w-[380px]'}`}>
                <button 
                   onClick={() => setPanelMinimized(!panelMinimized)}
                   className="absolute -left-4 top-12 bg-slate-800 border border-slate-700 p-1.5 rounded-full text-emerald-500 hover:text-white shadow-2xl z-50 transition-transform active:scale-90"
@@ -312,46 +324,46 @@ const App: React.FC = () => {
                  {panelMinimized ? <ChevronLeft size={16}/> : <ChevronRight size={16}/>}
                </button>
                
-               {!panelMinimized ? (
-                  <div className="flex flex-col h-full">
-                    <div className="flex-1 overflow-hidden">
-                      <NodeInfoPanel 
-                        node={selectedNode} 
-                        project={activeProject} 
-                        onClose={() => setSelectedNode(null)} 
-                      />
-                    </div>
-                    
-                    <div className="border-t border-slate-800 bg-slate-950/40 p-6">
-                      <button 
-                        onClick={() => setLegendOpen(!legendOpen)}
-                        className="w-full flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-emerald-500 hover:text-white transition-colors"
-                      >
-                        <div className="flex items-center gap-2">
-                          <Shapes size={14} /> Legend
-                        </div>
-                        {legendOpen ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
-                      </button>
-                      {legendOpen && (
-                        <div className="mt-5 space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                          <div className="flex items-center gap-3">
-                            <div className="w-3 h-3 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.3)]"></div>
-                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Optimized Complexity</span>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <div className="w-3 h-3 rounded-full bg-orange-500 shadow-[0_0_10px_rgba(245,158,11,0.3)]"></div>
-                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Moderate Complexity</span>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <div className="w-3 h-3 rounded-full bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.3)]"></div>
-                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Heavy Technical Debt</span>
-                          </div>
-                        </div>
-                      )}
-                    </div>
+               <div className={`flex flex-col h-full overflow-hidden transition-opacity duration-300 ${panelMinimized ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+                  <div className="flex-1 overflow-y-auto custom-scrollbar">
+                    <NodeInfoPanel 
+                      node={selectedNode} 
+                      project={activeProject} 
+                      onClose={() => setSelectedNode(null)} 
+                    />
                   </div>
-               ) : (
-                  <div className="flex flex-col items-center pt-24 gap-16 opacity-30 select-none">
+                  
+                  <div className="border-t border-slate-800 bg-slate-950/40 p-6">
+                    <button 
+                      onClick={() => setLegendOpen(!legendOpen)}
+                      className="w-full flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-emerald-500 hover:text-white transition-colors"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Shapes size={14} /> Structural Legend
+                      </div>
+                      {legendOpen ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+                    </button>
+                    {legendOpen && (
+                      <div className="mt-5 space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                        <div className="flex items-center gap-3">
+                          <div className="w-3 h-3 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.3)]"></div>
+                          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Optimized Complexity</span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <div className="w-3 h-3 rounded-full bg-orange-500 shadow-[0_0_10px_rgba(245,158,11,0.3)]"></div>
+                          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Moderate Complexity</span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <div className="w-3 h-3 rounded-full bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.3)]"></div>
+                          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Heavy Technical Debt</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+               </div>
+               
+               {panelMinimized && (
+                  <div className="flex flex-col items-center pt-24 gap-16 opacity-30 select-none animate-in fade-in duration-300">
                     <div className="rotate-90 text-[10px] font-black uppercase tracking-[0.5em] text-slate-500 whitespace-nowrap">Intelligence Sidecar</div>
                     <Search className="text-emerald-500" size={24} />
                   </div>
@@ -458,6 +470,16 @@ const App: React.FC = () => {
     </div>
   );
 };
+
+const FeatureCard = ({ icon, title, desc }: { icon: React.ReactNode, title: string, desc: string }) => (
+  <div className="bg-slate-900/40 border border-slate-800 p-8 rounded-[2.5rem] hover:border-emerald-500/50 transition-all group flex flex-col gap-4 shadow-xl">
+    <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 w-fit group-hover:scale-110 transition-transform shadow-inner">
+      {icon}
+    </div>
+    <h3 className="text-xl font-black uppercase tracking-tighter text-slate-100">{title}</h3>
+    <p className="text-slate-500 text-sm font-medium leading-relaxed">{desc}</p>
+  </div>
+);
 
 const NavItem = ({ active, icon, onClick, label }: { active: boolean, icon: React.ReactNode, onClick: () => void, label: string }) => (
   <div className="relative group">

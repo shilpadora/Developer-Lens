@@ -1,4 +1,3 @@
-
 import { FileNode, GitStats, PeriodicMetric } from '../types';
 
 export class GitHubService {
@@ -6,7 +5,8 @@ export class GitHubService {
     const headers: Record<string, string> = {
       'Accept': 'application/vnd.github.v3+json',
     };
-    if (token) headers['Authorization'] = `token ${token}`;
+    const cleanToken = token?.trim();
+    if (cleanToken) headers['Authorization'] = `token ${cleanToken}`;
     return headers;
   }
 
@@ -14,7 +14,12 @@ export class GitHubService {
     const repoUrl = `https://api.github.com/repos/${owner}/${repo}`;
     const repoRes = await fetch(repoUrl, { headers: this.getHeaders(token) });
     
-    if (!repoRes.ok) throw new Error(`GitHub Error: ${repoRes.status}`);
+    if (!repoRes.ok) {
+      if (repoRes.status === 404) {
+        throw new Error(`GitHub Error 404: Repository not found. If this is a private repo, ensure your API token is valid and has "repo" scope.`);
+      }
+      throw new Error(`GitHub Error: ${repoRes.status}`);
+    }
 
     const repoData = await repoRes.json();
     const defaultBranch = repoData.default_branch || 'main';
@@ -22,6 +27,11 @@ export class GitHubService {
     const treeUrl = `https://api.github.com/repos/${owner}/${repo}/git/trees/${defaultBranch}?recursive=1`;
     const treeRes = await fetch(treeUrl, { headers: this.getHeaders(token) });
     const treeData = await treeRes.json();
+    
+    if (!treeRes.ok) {
+      throw new Error(`Tree fetch failed: ${treeData.message || treeRes.status}`);
+    }
+
     return { tree: this.buildHierarchy(treeData.tree), defaultBranch };
   }
 
@@ -32,7 +42,7 @@ export class GitHubService {
     const filtered = (tree || []).filter(item => {
       const parts = item.path.split('/');
       return !parts.some((p: string) => 
-        ['node_modules', '.git', 'dist', 'build', 'venv', '__pycache__'].includes(p)
+        ['node_modules', '.git', 'dist', 'build', 'venv', '__pycache__', '.next', '.DS_Store'].includes(p)
       );
     });
 
@@ -50,7 +60,8 @@ export class GitHubService {
             name: part,
             path: currentPath,
             type: isLast ? item.type : 'tree',
-            complexity: i === parts.length - 1 ? this.getComplexity(item.size || 0) : 'low',
+            kind: isLast ? (item.type === 'tree' ? 'folder' : 'file') : 'folder',
+            complexity: isLast && item.type === 'blob' ? this.getComplexity(item.size || 0) : 'low',
             children: isLast && item.type === 'blob' ? undefined : [],
             size: item.size
           };
@@ -65,7 +76,7 @@ export class GitHubService {
 
   private static getComplexity(size: number): 'low' | 'medium' | 'high' {
     if (size > 100000) return 'high';
-    if (size > 40000) return 'medium';
+    if (size > 30000) return 'medium';
     return 'low';
   }
 
@@ -109,14 +120,12 @@ export class GitHubService {
         const now = Date.now() / 1000;
         data.forEach((w: any) => {
           const age = now - w.week;
-          // GitHub activity is strictly 1 year
           if (age < 86400 * 7) periods.thisWeek.commits += w.total;
           if (age < 86400 * 30) periods.thisMonth.commits += w.total;
           if (age < 86400 * 365) {
             periods.thisYear.commits += w.total;
             periods.total.commits += w.total;
           }
-          // Today estimate from latest week day
           if (age < 86400 * 7 && w.days) {
             periods.today.commits = w.days[new Date().getDay()] || 0;
           }
@@ -137,7 +146,6 @@ export class GitHubService {
         const now = Date.now() / 1000;
         data.forEach((c: any) => {
           const author = c.author?.login || 'unknown';
-          
           c.weeks?.forEach((w: any) => {
             const age = now - w.w;
             const updateMetric = (m: PeriodicMetric) => {
@@ -162,20 +170,9 @@ export class GitHubService {
           });
         });
         
-        // Sorting contributors in all periods
         Object.values(periods).forEach(p => {
           p.contributors.sort((a, b) => b.commits - a.commits);
         });
-        
-        // Today is hard to get granularly without per-commit fetching, estimating from week
-        periods.today.additions = Math.round(periods.thisWeek.additions / 7);
-        periods.today.deletions = Math.round(periods.thisWeek.deletions / 7);
-        periods.today.contributors = periods.thisWeek.contributors.map(c => ({
-          ...c,
-          commits: Math.round(c.commits / 7) || (c.commits > 0 ? 1 : 0),
-          additions: Math.round(c.additions / 7),
-          deletions: Math.round(c.deletions / 7)
-        }));
       }
     }
 
@@ -200,10 +197,30 @@ export class GitHubService {
 
   static async getFile(owner: string, repo: string, path: string, token?: string): Promise<string> {
     try {
-      const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${path}`, { headers: this.getHeaders(token) });
-      if (!res.ok) return '';
+      // Correct path encoding for GitHub API
+      const encodedPath = path.split('/').map(seg => encodeURIComponent(seg)).join('/');
+      const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${encodedPath}`, { 
+        headers: this.getHeaders(token) 
+      });
+      
+      if (!res.ok) {
+        console.warn(`GitHub File Error: ${res.status} for ${path}`);
+        return '';
+      }
+      
       const data = await res.json();
-      return decodeURIComponent(escape(atob(data.content.replace(/\s/g, ''))));
-    } catch (e) { return ''; }
+      if (!data.content) return '';
+      
+      // Robust base64 to UTF-8 decoding
+      const binary = atob(data.content.replace(/\s/g, ''));
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+      return new TextDecoder().decode(bytes);
+    } catch (e) { 
+      console.error("GitHub Retrieval Error:", e);
+      return ''; 
+    }
   }
 }
