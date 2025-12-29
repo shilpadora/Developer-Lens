@@ -139,7 +139,6 @@ const App: React.FC = () => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     const rawUrl = (formData.get('url') as string).trim();
-    const token = (formData.get('token') as string)?.trim();
 
     const cleanUrl = rawUrl.replace(/\/$/, '').replace('.git', '');
     const match = cleanUrl.match(/github\.com\/([^/]+)\/([^/#? ]+)/);
@@ -154,7 +153,6 @@ const App: React.FC = () => {
       owner,
       name: repo,
       url: cleanUrl,
-      token: token || undefined,
       lastSync: Date.now()
     };
 
@@ -238,8 +236,8 @@ const App: React.FC = () => {
         <div className="flex flex-col gap-8 flex-1">
           <NavItem active={view === 'stack'} icon={<Layout />} onClick={() => setView('stack')} label="Tech Stack" />
           <NavItem active={view === 'topology'} icon={<Share2 />} onClick={() => setView('topology')} label="Mind Map" />
-          <NavItem active={view === 'schema'} icon={<Database />} onClick={() => setView('schema')} label="Schema" />
-          <NavItem active={view === 'analytics'} icon={<BarChart3 />} onClick={() => setView('analytics')} label="Analytics" />
+          <NavItem active={view === 'schema'} icon={<Database />} onClick={() => setView('schema')} label="Database" />
+          <NavItem active={view === 'analytics'} icon={<BarChart3 />} onClick={() => setView('analytics')} label="Git Analytics" />
         </div>
         <button onClick={() => setShowImport(true)} className="p-4 bg-slate-900 hover:bg-slate-800 rounded-2xl text-emerald-500 transition-all border border-slate-800 shadow-lg group relative">
           <Plus size={24} />
@@ -257,16 +255,18 @@ const App: React.FC = () => {
 
           <div className="flex items-center gap-4">
             {activeProject ? (
-              <div className="flex items-center gap-3 bg-slate-900/50 p-1.5 pl-4 rounded-2xl border border-slate-800 shadow-inner">
-                <div className="flex flex-col mr-2">
-                  <h3 className="text-xs font-black uppercase tracking-widest truncate max-w-[150px] text-emerald-500">{activeProject.name}</h3>
-                  <span className="text-[9px] text-slate-600 font-mono tracking-wider opacity-60">@{activeProject.owner}</span>
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-3 bg-slate-900/50 p-1.5 pl-4 rounded-2xl border border-slate-800 shadow-inner">
+                  <div className="flex flex-col mr-2">
+                    <h3 className="text-xs font-black uppercase tracking-widest truncate max-w-[150px] text-emerald-500">{activeProject.name}</h3>
+                    <span className="text-[9px] text-slate-600 font-mono tracking-wider opacity-60">@{activeProject.owner}</span>
+                  </div>
                 </div>
                 <button
                   onClick={() => { setActiveId(null); setView('stack'); setSelectedNode(null); }}
-                  className="px-3 py-2 bg-slate-800 hover:bg-emerald-500 hover:text-slate-950 rounded-xl text-[9px] font-black uppercase tracking-widest text-slate-400 transition-all flex items-center gap-2 group border border-slate-700 shadow-lg active:scale-95"
+                  className="px-4 py-2.5 bg-slate-800 hover:bg-emerald-500 hover:text-slate-950 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-400 transition-all flex items-center gap-2 group border border-slate-700 shadow-lg active:scale-95"
                 >
-                  <Repeat size={12} className="group-hover:rotate-180 transition-transform duration-500" /> Switch Repo
+                  <Repeat size={14} className="group-hover:rotate-180 transition-transform duration-500" /> Switch Project
                 </button>
               </div>
             ) : null}
@@ -422,7 +422,7 @@ const App: React.FC = () => {
         <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-2xl z-[100] flex items-center justify-center p-8 overflow-y-auto">
           <div className="bg-slate-900 border border-slate-800 w-full max-w-xl rounded-[2.5rem] shadow-[0_0_80px_rgba(16,185,129,0.1)] overflow-hidden my-auto">
             <div className="p-10 border-b border-slate-800 flex justify-between items-center bg-slate-900/50">
-              <h3 className="text-3xl font-black uppercase tracking-tighter text-white">Import Pipeline</h3>
+              <h3 className="text-3xl font-black uppercase tracking-tighter text-white">Import Project</h3>
               <button onClick={() => setShowImport(false)} className="text-slate-600 hover:text-white p-2.5 rounded-full hover:bg-slate-800 transition-colors">
                 <X size={24} />
               </button>
@@ -504,13 +504,7 @@ const App: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="space-y-3">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-2">Personal Access Token (Optional)</label>
-                  <div className="relative">
-                    <Lock className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-600" size={20} />
-                    <input name="token" type="password" placeholder="ghp_xxxxxxxxxxxx" className="w-full bg-slate-950 border border-slate-800 rounded-2xl py-5 pl-14 pr-6 text-white focus:outline-none focus:border-emerald-500 transition-all shadow-inner placeholder:text-slate-800 font-mono text-sm" />
-                  </div>
-                </div>
+
 
                 <button type="submit" className="w-full bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-black py-6 rounded-2xl uppercase tracking-[0.2em] shadow-2xl hover:scale-[1.01] active:scale-95 transition-all">
                   Initiate Lens Sync
