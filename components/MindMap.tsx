@@ -8,10 +8,11 @@ import { ParserService } from '../services/parserService';
 interface Props {
   data: FileNode[];
   project?: RepoProject;
+  globalToken?: string;
   onNodeSelect: (node: FileNode) => void;
 }
 
-const MindMap: React.FC<Props> = ({ data, project, onNodeSelect }) => {
+const MindMap: React.FC<Props> = ({ data, project, globalToken, onNodeSelect }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const [loadingPath, setLoadingPath] = useState<string | null>(null);
 
@@ -92,7 +93,8 @@ const MindMap: React.FC<Props> = ({ data, project, onNodeSelect }) => {
           } else {
             setLoadingPath(d.data.path);
             try {
-              const content = await GitHubService.getFile(project.owner, project.name, d.data.path, project.token);
+              const tokenToUse = project.token || globalToken;
+              const content = await GitHubService.getFile(project.owner, project.name, d.data.path, tokenToUse);
               const structure = ParserService.parseCodeStructure(content, d.data.name);
               if (structure.length > 0) {
                 const subRoot = d3.hierarchy({ ...d.data, children: structure });

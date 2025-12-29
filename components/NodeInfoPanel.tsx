@@ -12,12 +12,13 @@ import { ParserService } from '../services/parserService';
 interface Props {
   node: FileNode | null;
   project: RepoProject;
+  globalToken?: string;
   onClose: () => void;
 }
 
 type Tab = 'node' | 'contributors' | 'audit' | 'chat';
 
-const NodeInfoPanel: React.FC<Props> = ({ node, project }) => {
+const NodeInfoPanel: React.FC<Props> = ({ node, project, globalToken, onClose }) => {
   const [activeTab, setActiveTab] = useState<Tab>('node');
   const [loading, setLoading] = useState(false);
   const [aiInsight, setAiInsight] = useState<string>('');
@@ -42,7 +43,8 @@ const NodeInfoPanel: React.FC<Props> = ({ node, project }) => {
     if (!node || (node.kind !== 'file' && node.type !== 'blob')) return;
     setFetchingStructure(true);
     try {
-      const content = await GitHubService.getFile(project.owner, project.name, node.path, project.token);
+      const tokenToUse = project.token || globalToken;
+      const content = await GitHubService.getFile(project.owner, project.name, node.path, tokenToUse);
       setFileContent(content);
       const internalNodes = ParserService.parseCodeStructure(content, node.name);
       setStructure(internalNodes);
@@ -57,7 +59,8 @@ const NodeInfoPanel: React.FC<Props> = ({ node, project }) => {
     if (!node) return;
     setLoading(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: project.token || process.env.API_KEY || '' });
+      const tokenToUse = project.token || globalToken;
+      const ai = new GoogleGenAI({ apiKey: tokenToUse || process.env.API_KEY || '' });
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: `Analyze file: "${node.path}" in repo: "${project.name}". Complexity: ${node.complexity}. Provide 2 precise technical insights about its architectural role and potential technical debt.`
@@ -81,14 +84,15 @@ const NodeInfoPanel: React.FC<Props> = ({ node, project }) => {
     try {
       let context = `Context: Repository ${project.name}, Path: ${node.path}. `;
       if (node.kind === 'file' || node.type === 'blob') {
-        const content = fileContent || await GitHubService.getFile(project.owner, project.name, node.path, project.token);
+        const tokenToUse = project.token || globalToken;
+        const content = fileContent || await GitHubService.getFile(project.owner, project.name, node.path, tokenToUse);
         if (content) {
           setFileContent(content);
           context += `Code snippet for context:\n\n${content.slice(0, 5000)}\n\n`;
         }
       }
-
-      const ai = new GoogleGenAI({ apiKey: project.token || process.env.API_KEY || '' });
+      const tokenToUse = project.token || globalToken;
+      const ai = new GoogleGenAI({ apiKey: tokenToUse || process.env.API_KEY || '' });
       const chat = ai.chats.create({
         model: 'gemini-3-pro-preview',
         config: { systemInstruction: "You are a lead architect. Use provided code context to explain logic, patterns, and optimization strategies." }

@@ -323,7 +323,7 @@ const App: React.FC = () => {
                 ) : (
                   <div className="h-full w-full relative">
                     {view === 'stack' && <StackView aiData={aiData} stats={stats} aiLoading={aiLoading} project={activeProject} onTriggerAnalysis={runAi} />}
-                    {view === 'topology' && <MindMap data={tree} project={activeProject} onNodeSelect={handleNodeSelect} />}
+                    {view === 'topology' && <MindMap data={tree} project={activeProject} globalToken={globalToken} onNodeSelect={handleNodeSelect} />}
                     {view === 'analytics' && stats && <StatsDashboard stats={stats} />}
                     {view === 'schema' && <SchemaGrid entities={entities} />}
                   </div>
@@ -346,6 +346,7 @@ const App: React.FC = () => {
                   <NodeInfoPanel
                     node={selectedNode}
                     project={activeProject}
+                    globalToken={globalToken}
                     onClose={() => setSelectedNode(null)}
                   />
                 </div>
@@ -500,6 +501,14 @@ const App: React.FC = () => {
                   <div className="relative">
                     <Terminal className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-600" size={20} />
                     <input required name="url" placeholder="https://github.com/owner/repo" className="w-full bg-slate-950 border border-slate-800 rounded-2xl py-5 pl-14 pr-6 text-white focus:outline-none focus:border-emerald-500 transition-all shadow-inner placeholder:text-slate-800 font-mono text-sm" />
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-2">Personal Access Token (Optional)</label>
+                  <div className="relative">
+                    <Lock className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-600" size={20} />
+                    <input name="token" type="password" placeholder="ghp_xxxxxxxxxxxx" className="w-full bg-slate-950 border border-slate-800 rounded-2xl py-5 pl-14 pr-6 text-white focus:outline-none focus:border-emerald-500 transition-all shadow-inner placeholder:text-slate-800 font-mono text-sm" />
                   </div>
                 </div>
 
