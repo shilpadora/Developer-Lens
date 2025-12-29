@@ -77,12 +77,14 @@ const MindMap: React.FC<Props> = ({ data, project, onNodeSelect }) => {
         e.stopPropagation();
         onNodeSelect(d.data);
 
-        // Files or Folders can expand
-        if (d.data.kind === 'folder' || d.data.kind === 'class') {
+        // Folders, Classes, and Files can expand
+        const kind = d.data.kind || (d.data.type === 'tree' ? 'folder' : 'file');
+
+        if (kind === 'folder' || kind === 'class') {
           if (d.children) { d._children = d.children; d.children = undefined; }
           else { d.children = d._children; d._children = undefined; }
           update(d);
-        } else if (d.data.kind === 'file' && project) {
+        } else if (kind === 'file' && project) {
           if (d.children || d._children) {
             if (d.children) { d._children = d.children; d.children = undefined; }
             else { d.children = d._children; d._children = undefined; }

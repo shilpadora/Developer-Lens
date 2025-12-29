@@ -361,18 +361,45 @@ const App: React.FC = () => {
                     {legendOpen ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
                   </button>
                   {legendOpen && (
-                    <div className="mt-5 space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                      <div className="flex items-center gap-3">
-                        <div className="w-3 h-3 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.3)]"></div>
-                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Optimized Complexity</span>
+                    <div className="mt-5 space-y-5 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                      <div className="space-y-2.5">
+                        <p className="text-[8px] font-black uppercase tracking-[0.2em] text-slate-600 mb-2 border-b border-slate-800 pb-1">Complexity</p>
+                        <div className="flex items-center gap-4">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.3)]"></div>
+                            <span className="text-[9px] font-bold text-slate-500 uppercase">Low</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(245,158,11,0.3)]"></div>
+                            <span className="text-[9px] font-bold text-slate-500 uppercase">Med</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="w-2.5 h-2.5 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.3)]"></div>
+                            <span className="text-[9px] font-bold text-slate-500 uppercase">High</span>
+                          </div>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-3">
-                        <div className="w-3 h-3 rounded-full bg-orange-500 shadow-[0_0_10px_rgba(245,158,11,0.3)]"></div>
-                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Moderate Complexity</span>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <div className="w-3 h-3 rounded-full bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.3)]"></div>
-                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Heavy Technical Debt</span>
+
+                      <div className="space-y-2.5">
+                        <p className="text-[8px] font-black uppercase tracking-[0.2em] text-slate-600 mb-2 border-b border-slate-800 pb-1">Topology</p>
+                        <div className="flex flex-wrap gap-x-4 gap-y-3">
+                          <div className="flex items-center gap-2">
+                            <svg width="12" height="12" viewBox="-18 -14 36 28" className="text-emerald-500/30 overflow-visible"><path d="M-15,-11 L-15,11 L15,11 L15,-6 L4,-6 L0,-11 Z" fill="currentColor" stroke="currentColor" strokeWidth="3" /></svg>
+                            <span className="text-[9px] font-bold text-slate-500 uppercase">Dir</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <svg width="12" height="12" viewBox="-12 -15 24 30" className="text-white/20 overflow-visible"><path d="M-10,-13 L6,-13 L10,-9 L10,13 L-10,13 Z" fill="currentColor" stroke="currentColor" strokeWidth="3" /></svg>
+                            <span className="text-[9px] font-bold text-slate-500 uppercase">File</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <svg width="12" height="12" viewBox="-14 -12 28 24" className="text-blue-500/40 overflow-visible"><path d="M-12,0 L-6,-10 L6,-10 L12,0 L6,10 L-6,10 Z" fill="currentColor" stroke="currentColor" strokeWidth="3" /></svg>
+                            <span className="text-[9px] font-bold text-slate-500 uppercase">Class</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <svg width="12" height="12" viewBox="-18 -10 36 20" className="text-emerald-500/40 overflow-visible"><ellipse rx="15" ry="8" fill="currentColor" stroke="currentColor" strokeWidth="3" /></svg>
+                            <span className="text-[9px] font-bold text-slate-500 uppercase">Fn</span>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   )}
