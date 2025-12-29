@@ -1,19 +1,43 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
 import { AnalysisResult, FileNode } from "../types";
 
 export class AnalysisService {
   static async analyze(repoName: string, tree: FileNode[]): Promise<AnalysisResult> {
-    // Initializing with the required named parameter
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
-    const summary = this.getSummary(tree).join(', ');
-    const prompt = `Analyze this project structure: ${repoName}. Files: ${summary}.
-    Provide a high-fidelity code audit including:
-    1. Performance analysis.
-    2. Architectural patterns identified.
-    3. Code quality assessment.
-    Also identify the tech stack.
-    Use Google Search to find related best practices or known issues for this stack.`;
+    // Flatten tree to look for critical configuration files
+    const allFiles: string[] = [];
+    const collect = (nodes: FileNode[]) => {
+      nodes.forEach(n => {
+        allFiles.push(n.path);
+        if (n.children) collect(n.children);
+      });
+    };
+    collect(tree);
+
+    const configFiles = allFiles.filter(f => 
+      f.endsWith('package.json') || 
+      f.endsWith('requirements.txt') || 
+      f.endsWith('pyproject.toml') || 
+      f.endsWith('docker-compose.yml') || 
+      f.endsWith('Dockerfile') || 
+      f.endsWith('.env') || 
+      f.includes('.github/workflows') ||
+      f.endsWith('terraform.tf') ||
+      f.includes('charts/')
+    );
+
+    const prompt = `Analyze this project: ${repoName}. 
+    Available configuration files: ${configFiles.join(', ')}.
+    Identify the Tech Stack and Dependencies:
+    1. Frontend: Framework (React, Vue, etc.) and main libraries from package.json.
+    2. Backend: Framework (Flask, FastAPI, Django, Express, etc.) and libraries from requirements.txt or pyproject.toml.
+    3. Databases: Mentioned in .env or settings (MySQL, PostgreSQL, MongoDB, Redis, etc.).
+    4. DevOps: CI/CD (GitHub Actions), Infrastructure (Terraform), Containerization (Docker, K8s, Helm).
+    
+    Also provide a brief Code Audit (Performance, Architecture, Quality).
+    Research best practices for this specific stack using Google Search.`;
 
     const response = await ai.models.generateContent({
       model: 'gemini-3-pro-preview',
@@ -32,17 +56,27 @@ export class AnalysisService {
               properties: {
                 frontend: { type: Type.ARRAY, items: { type: Type.STRING } },
                 backend: { type: Type.ARRAY, items: { type: Type.STRING } },
-                devops: { type: Type.ARRAY, items: { type: Type.STRING } }
+                devops: { type: Type.ARRAY, items: { type: Type.STRING } },
+                databases: { type: Type.ARRAY, items: { type: Type.STRING } }
               },
-              required: ['frontend', 'backend', 'devops']
+              required: ['frontend', 'backend', 'devops', 'databases']
+            },
+            libraries: {
+              type: Type.OBJECT,
+              properties: {
+                frontend: { type: Type.ARRAY, items: { type: Type.STRING } },
+                backend: { type: Type.ARRAY, items: { type: Type.STRING } },
+                devops: { type: Type.ARRAY, items: { type: Type.STRING } },
+                databases: { type: Type.ARRAY, items: { type: Type.STRING } }
+              },
+              required: ['frontend', 'backend', 'devops', 'databases']
             }
           },
-          required: ['performance', 'architecture', 'codeQuality', 'stack']
+          required: ['performance', 'architecture', 'codeQuality', 'stack', 'libraries']
         }
       }
     });
 
-    // Accessing .text property directly as per guidelines
     const textOutput = response.text;
     if (!textOutput) {
       throw new Error("Empty response from AI");
@@ -55,10 +89,5 @@ export class AnalysisService {
     })) || [];
 
     return { ...result, sources };
-  }
-
-  private static getSummary(nodes: FileNode[], depth = 0): string[] {
-    if (depth > 1) return [];
-    return nodes.map(n => n.name).slice(0, 30);
   }
 }

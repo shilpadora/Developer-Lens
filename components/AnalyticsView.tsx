@@ -86,7 +86,8 @@ const AnalyticsView: React.FC<Props> = ({ stats }) => {
           <h3 className="text-lg font-bold">Contributor Impact</h3>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {stats.contributors.map((c, i) => (
+          {/* Fix: contributors is nested under periods.total in GitStats */}
+          {stats.periods.total.contributors.map((c, i) => (
             <div key={i} className="p-4 bg-slate-900 border border-slate-800 rounded-lg">
               <div className="font-bold text-emerald-400 truncate mb-2">{c.author}</div>
               <div className="flex justify-between text-xs mb-1">

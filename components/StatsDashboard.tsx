@@ -1,91 +1,182 @@
-import React from 'react';
+
+import React, { useState, useMemo } from 'react';
 import { 
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  BarChart, Bar, Cell, PieChart, Pie
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  AreaChart, Area
 } from 'recharts';
-import { GitStats } from '../types';
-import { Activity, Code2, Users2 } from 'lucide-react';
+import { GitStats, TimePeriod } from '../types';
+import { Activity, Code2, Users2, Calendar, PlusCircle, MinusCircle, User } from 'lucide-react';
 
 const StatsDashboard: React.FC<{ stats: GitStats }> = ({ stats }) => {
-  const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6'];
-  const extensions = Object.entries(stats.extensions)
+  const [activePeriod, setActivePeriod] = useState<TimePeriod>('thisMonth');
+  const [contributorMetric, setContributorMetric] = useState<'commits' | 'additions' | 'deletions'>('commits');
+  
+  const currentMetric = useMemo(() => stats.periods[activePeriod], [stats, activePeriod]);
+
+  const extensions = useMemo(() => Object.entries(stats.extensions)
     .map(([name, value]) => ({ name, value }))
-    .sort((a,b) => b.value - a.value).slice(0, 6);
+    .sort((a,b) => b.value - a.value).slice(0, 6), [stats]);
+
+  const sortedContributors = useMemo(() => [...currentMetric.contributors]
+    .sort((a, b) => b[contributorMetric] - a[contributorMetric])
+    .slice(0, 10), [currentMetric, contributorMetric]);
+
+  const periods: { id: TimePeriod; label: string }[] = [
+    { id: 'today', label: 'Today' },
+    { id: 'thisWeek', label: 'This Week' },
+    { id: 'thisMonth', label: 'This Month' },
+    { id: 'thisYear', label: 'This Year' },
+    { id: 'total', label: 'All Time' },
+  ];
+
+  const currentPeriodLabel = periods.find(p => p.id === activePeriod)?.label || '';
 
   return (
-    <div className="h-full overflow-y-auto p-10 space-y-10 custom-scrollbar">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-        <div className="bg-slate-900/50 p-8 rounded-[2rem] border border-slate-800 shadow-xl">
-           <div className="flex items-center gap-3 mb-8">
-             <Activity className="text-emerald-500" size={20} />
-             <h3 className="text-sm font-black uppercase tracking-widest text-slate-400">Commit Velocity</h3>
-           </div>
-           <div className="h-72">
-             <ResponsiveContainer width="100%" height="100%">
-               <LineChart data={stats.commits}>
-                 <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-                 <XAxis dataKey="date" stroke="#475569" fontSize={10} tickLine={false} />
-                 <YAxis stroke="#475569" fontSize={10} tickLine={false} axisLine={false} />
-                 <Tooltip contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '12px', fontSize: '10px' }} />
-                 <Line type="monotone" dataKey="count" stroke="#10b981" strokeWidth={3} dot={{ fill: '#10b981', r: 4 }} activeDot={{ r: 6 }} />
-               </LineChart>
-             </ResponsiveContainer>
-           </div>
-        </div>
+    <div className="h-full overflow-y-auto p-8 lg:p-12 space-y-12 custom-scrollbar bg-slate-950/20">
+      <div className="flex flex-wrap items-center gap-3 bg-slate-900/40 p-2 rounded-3xl border border-slate-800 w-fit">
+        {periods.map((p) => (
+          <button
+            key={p.id}
+            onClick={() => setActivePeriod(p.id)}
+            className={`px-6 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${
+              activePeriod === p.id 
+                ? 'bg-emerald-500 text-slate-950 shadow-[0_0_20px_rgba(16,185,129,0.3)]' 
+                : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800'
+            }`}
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
 
-        <div className="bg-slate-900/50 p-8 rounded-[2rem] border border-slate-800 shadow-xl">
-           <div className="flex items-center gap-3 mb-8">
-             <Code2 className="text-emerald-500" size={20} />
-             <h3 className="text-sm font-black uppercase tracking-widest text-slate-400">File Extensions</h3>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+        <SummaryCard 
+          label={`${currentPeriodLabel} Commits`} 
+          value={currentMetric.commits.toLocaleString()} 
+          icon={<Activity size={20}/>} 
+          color="text-emerald-500" 
+        />
+        <SummaryCard 
+          label={`${currentPeriodLabel} Adds`} 
+          value={`+${currentMetric.additions.toLocaleString()}`} 
+          icon={<PlusCircle size={20}/>} 
+          color="text-emerald-400" 
+        />
+        <SummaryCard 
+          label={`${currentPeriodLabel} Dels`} 
+          value={`-${currentMetric.deletions.toLocaleString()}`} 
+          icon={<MinusCircle size={20}/>} 
+          color="text-red-500" 
+        />
+        <SummaryCard 
+          label="Primary Extension" 
+          value={extensions[0]?.name.toUpperCase() || 'N/A'} 
+          icon={<Code2 size={20}/>} 
+          color="text-blue-500" 
+        />
+      </div>
+
+      <div className="grid grid-cols-1 gap-10">
+        <div className="bg-slate-900/40 p-10 rounded-[2.5rem] border border-slate-800 shadow-2xl">
+           <div className="flex justify-between items-center mb-10">
+              <div className="flex items-center gap-4">
+                <Calendar className="text-emerald-500" size={24} />
+                <h3 className="text-lg font-black uppercase tracking-tighter text-slate-200">Velocity Graph</h3>
+              </div>
+              <div className="px-4 py-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-[9px] font-black text-emerald-500 uppercase tracking-widest">
+                {currentPeriodLabel} Momentum
+              </div>
            </div>
-           <div className="h-72 flex flex-col items-center">
+           <div className="h-80">
              <ResponsiveContainer width="100%" height="100%">
-               <PieChart>
-                 <Pie data={extensions} innerRadius={60} outerRadius={80} paddingAngle={8} dataKey="value">
-                   {extensions.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                 </Pie>
-                 <Tooltip contentStyle={{ backgroundColor: '#0f172a', border: 'none', borderRadius: '12px' }} />
-               </PieChart>
+               <AreaChart data={stats.monthlyActivity}>
+                 <defs>
+                    <linearGradient id="colorCommits" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                    </linearGradient>
+                 </defs>
+                 <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                 <XAxis dataKey="month" stroke="#475569" fontSize={11} tickLine={false} axisLine={false} />
+                 <YAxis stroke="#475569" fontSize={11} tickLine={false} axisLine={false} />
+                 <Tooltip 
+                   contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '16px', fontSize: '11px' }}
+                   itemStyle={{ color: '#10b981' }}
+                 />
+                 <Area type="monotone" dataKey="commits" stroke="#10b981" strokeWidth={4} fillOpacity={1} fill="url(#colorCommits)" />
+               </AreaChart>
              </ResponsiveContainer>
-             <div className="flex flex-wrap gap-4 justify-center mt-4">
-               {extensions.map((e, i) => (
-                 <div key={e.name} className="flex items-center gap-2">
-                   <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }}></div>
-                   <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{e.name}</span>
-                 </div>
-               ))}
-             </div>
            </div>
         </div>
       </div>
 
-      <div className="bg-slate-900/50 p-10 rounded-[2.5rem] border border-slate-800 shadow-xl">
-         <div className="flex items-center gap-3 mb-10">
-           <Users2 className="text-emerald-500" size={20} />
-           <h3 className="text-sm font-black uppercase tracking-widest text-slate-400">Contributer Impact</h3>
-         </div>
-         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
-           {stats.contributors.map(c => (
-             <div key={c.author} className="bg-slate-950 p-6 rounded-2xl border border-slate-800 hover:border-emerald-500/30 transition-all">
-               <h4 className="font-black text-emerald-500 text-lg mb-4 truncate">{c.author}</h4>
-               <div className="space-y-2">
-                 <Metric label="Commits" value={c.commits} />
-                 <Metric label="Additions" value={c.additions} color="text-emerald-500" />
-                 <Metric label="Deletions" value={c.deletions} color="text-red-500" />
-               </div>
-             </div>
-           ))}
-         </div>
+      <div className="grid grid-cols-1 gap-10">
+        <div className="bg-slate-900/40 p-10 rounded-[2.5rem] border border-slate-800 shadow-2xl">
+           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 mb-10">
+              <div className="flex items-center gap-4">
+                <Users2 className="text-emerald-500" size={24} />
+                <h3 className="text-lg font-black uppercase tracking-tighter text-slate-200">Contributors - {currentPeriodLabel}</h3>
+              </div>
+              <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-800">
+                 <MetricTab active={contributorMetric === 'commits'} onClick={() => setContributorMetric('commits')} label="Commits" />
+                 <MetricTab active={contributorMetric === 'additions'} onClick={() => setContributorMetric('additions')} label="Adds" />
+                 <MetricTab active={contributorMetric === 'deletions'} onClick={() => setContributorMetric('deletions')} label="Dels" />
+              </div>
+           </div>
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {sortedContributors.length > 0 ? sortedContributors.map((c, i) => (
+                <div key={c.author} className="flex items-center justify-between p-5 bg-slate-950/50 rounded-3xl border border-slate-800 hover:border-emerald-500/30 transition-all group">
+                   <div className="flex items-center gap-5">
+                      <span className="text-lg font-black text-slate-800 group-hover:text-emerald-500/50 transition-colors">#{i+1}</span>
+                      <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-emerald-500 group-hover:bg-emerald-500 group-hover:text-slate-950 transition-all">
+                        <User size={24} />
+                      </div>
+                      <div>
+                        <h4 className="font-black text-slate-200 uppercase tracking-tighter text-sm">@{c.author}</h4>
+                        <div className="flex items-center gap-3 mt-1">
+                           <span className="text-[9px] font-black uppercase text-emerald-500">+{c.additions.toLocaleString()}</span>
+                           <span className="text-[9px] font-black uppercase text-red-500">-{c.deletions.toLocaleString()}</span>
+                        </div>
+                      </div>
+                   </div>
+                   <div className="text-right">
+                      <div className="text-2xl font-black text-white tracking-tighter">
+                        {contributorMetric === 'commits' ? c.commits : contributorMetric === 'additions' ? `+${c.additions.toLocaleString()}` : `-${c.deletions.toLocaleString()}`}
+                      </div>
+                      <span className="text-[9px] font-black uppercase tracking-widest text-slate-600">{contributorMetric.toUpperCase()}</span>
+                   </div>
+                </div>
+              )) : (
+                <div className="col-span-full py-20 text-center text-slate-700 font-black uppercase tracking-widest text-xs opacity-40 border-2 border-dashed border-slate-800 rounded-3xl">
+                  No activity captured for this period
+                </div>
+              )}
+           </div>
+        </div>
       </div>
     </div>
   );
 };
 
-const Metric = ({ label, value, color = "text-slate-300" }: { label: string, value: number, color?: string }) => (
-  <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest border-b border-slate-900 pb-2">
-    <span className="text-slate-500">{label}</span>
-    <span className={color}>{value.toLocaleString()}</span>
+const SummaryCard = ({ label, value, icon, color }: { label: string, value: string | number, icon: React.ReactNode, color: string }) => (
+  <div className="bg-slate-900/40 p-8 rounded-[2rem] border border-slate-800 shadow-xl flex flex-col justify-between hover:border-emerald-500/20 transition-all group">
+    <div className={`p-4 w-fit rounded-2xl bg-slate-950 border border-slate-800 mb-8 ${color} group-hover:scale-110 transition-transform shadow-inner`}>
+      {icon}
+    </div>
+    <div>
+      <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-600 mb-2">{label}</h4>
+      <div className={`text-4xl font-black tracking-tighter leading-none ${color}`}>{value}</div>
+    </div>
   </div>
+);
+
+const MetricTab = ({ active, onClick, label }: { active: boolean, onClick: () => void, label: string }) => (
+  <button 
+    onClick={onClick}
+    className={`px-5 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${active ? 'bg-emerald-500 text-slate-950' : 'text-slate-600 hover:text-slate-300'}`}
+  >
+    {label}
+  </button>
 );
 
 export default StatsDashboard;

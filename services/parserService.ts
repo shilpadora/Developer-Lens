@@ -1,3 +1,4 @@
+
 import { Entity, FileNode, AnalysisResult } from '../types';
 
 export class ParserService {
@@ -16,22 +17,38 @@ export class ParserService {
       const body = match[2];
       const fields: Entity['fields'] = [];
       const relations: Entity['relations'] = [];
+      const indexes: string[] = [];
 
       body.split('\n').forEach(line => {
-        const fieldMatch = /^\s*(\w+)\s+([A-Z]\w+|String|Int|Boolean|DateTime|Float|Json|Decimal)(\[\])?(\?)?/.exec(line);
+        // Detect indexes/constraints
+        if (line.includes('@@index') || line.includes('@@unique') || line.includes('@@id')) {
+          indexes.push(line.trim());
+          return;
+        }
+
+        const fieldMatch = /^\s*(\w+)\s+([A-Z]\w+|String|Int|Boolean|DateTime|Float|Json|Decimal)(\[\])?(\?)?(\s+@\w+.*)?/.exec(line);
         if (fieldMatch) {
           const fName = fieldMatch[1];
           const fType = fieldMatch[2];
           const isArray = !!fieldMatch[3];
+          const decorators = fieldMatch[5] || '';
+
+          const isPK = decorators.includes('@id');
+          const isUnique = decorators.includes('@unique');
 
           if (/[A-Z]/.test(fType[0]) && !['String','Int','Boolean','DateTime','Float','Json','Decimal'].includes(fType)) {
-            relations.push({ target: fType, type: isArray ? 'one-to-many' : 'one-to-one' });
+            const relNameMatch = /@relation\(\s*name:\s*['"](\w+)['"]/.exec(decorators);
+            relations.push({ 
+              target: fType, 
+              type: isArray ? 'one-to-many' : 'one-to-one',
+              name: relNameMatch ? relNameMatch[1] : undefined
+            });
           } else {
-            fields.push({ name: fName, type: fType + (isArray ? '[]' : '') });
+            fields.push({ name: fName, type: fType + (isArray ? '[]' : ''), isPrimaryKey: isPK, isUnique });
           }
         }
       });
-      entities.push({ name, fields, relations });
+      entities.push({ name, fields, relations, indexes });
     }
     return entities;
   }
@@ -45,6 +62,7 @@ export class ParserService {
       const body = match[2];
       const fields: Entity['fields'] = [];
       const relations: Entity['relations'] = [];
+      const indexes: string[] = [];
 
       body.split('\n').forEach(line => {
         const fieldMatch = /^\s*(\w+)\s*=\s*models\.(\w+)\((.*?)\)/.exec(line);
@@ -52,43 +70,85 @@ export class ParserService {
           const fName = fieldMatch[1];
           const fType = fieldMatch[2];
           const args = fieldMatch[3];
-          if (fType === 'ForeignKey' || fType === 'OneToOneField') {
-            const target = /['"](\w+)['"]/.exec(args)?.[1] || 'Unknown';
-            relations.push({ target, type: fType === 'ForeignKey' ? 'one-to-many' : 'one-to-one' });
+
+          const isPK = args.includes('primary_key=True');
+          const isUnique = args.includes('unique=True');
+
+          if (fType === 'ForeignKey' || fType === 'OneToOneField' || fType === 'ManyToManyField') {
+            const targetMatch = /['"](\w+)['"]|(\w+)/.exec(args);
+            const target = targetMatch ? (targetMatch[1] || targetMatch[2]) : 'Unknown';
+            const relatedMatch = /related_name\s*=\s*['"](\w+)['"]/.exec(args);
+            
+            relations.push({ 
+              target, 
+              type: fType === 'ForeignKey' ? 'one-to-many' : fType === 'ManyToManyField' ? 'many-to-many' : 'one-to-one',
+              name: relatedMatch ? relatedMatch[1] : undefined
+            });
           } else {
-            fields.push({ name: fName, type: fType });
+            fields.push({ name: fName, type: fType, isPrimaryKey: isPK, isUnique });
           }
         }
+        
+        if (line.includes('indexes =') || line.includes('unique_together =')) {
+          indexes.push(line.trim());
+        }
       });
-      entities.push({ name, fields, relations });
+      entities.push({ name, fields, relations, indexes });
     }
     return entities;
   }
 
-  static detectStack(nodes: FileNode[]): AnalysisResult['stack'] {
-    const fe: string[] = [];
-    const be: string[] = [];
-    const de: string[] = [];
-
-    const all = this.flatten(nodes);
-    if (all.some(p => p.includes('package.json'))) fe.push('Node.js');
-    if (all.some(p => p.includes('tsconfig.json'))) fe.push('TypeScript');
-    if (all.some(p => p.includes('tailwind.config'))) fe.push('Tailwind CSS');
-    if (all.some(p => p.includes('next.config'))) fe.push('Next.js');
-    if (all.some(p => p.includes('App.tsx'))) fe.push('React');
+  static parseCodeStructure(content: string, fileName: string): FileNode[] {
+    const results: FileNode[] = [];
+    const lines = content.split('\n');
+    const isPython = fileName.endsWith('.py');
     
-    if (all.some(p => p.includes('manage.py'))) be.push('Django');
-    if (all.some(p => p.includes('requirements.txt'))) be.push('Python');
-    if (all.some(p => p.includes('prisma'))) be.push('Prisma');
-    if (all.some(p => p.includes('go.mod'))) be.push('Go');
+    if (isPython) {
+      const classRegex = /^class\s+(\w+)/;
+      const defRegex = /^\s{4}def\s+(\w+)/;
+      const topDefRegex = /^def\s+(\w+)/;
+      let currentClass: FileNode | null = null;
 
-    if (all.some(p => p.includes('Dockerfile'))) de.push('Docker');
-    if (all.some(p => p.includes('.github/workflows'))) de.push('GitHub Actions');
-
-    return { frontend: fe, backend: be, devops: de };
-  }
-
-  private static flatten(nodes: FileNode[]): string[] {
-    return nodes.reduce((acc, n) => [...acc, n.path, ...(n.children ? this.flatten(n.children) : [])], [] as string[]);
+      lines.forEach((line) => {
+        const classMatch = line.match(classRegex);
+        if (classMatch) {
+          currentClass = {
+            name: classMatch[1],
+            path: `${fileName}/${classMatch[1]}`,
+            type: 'tree',
+            complexity: 'medium',
+            children: []
+          };
+          results.push(currentClass);
+        }
+        const methodMatch = line.match(defRegex);
+        if (methodMatch && currentClass) {
+          currentClass.children?.push({
+            name: methodMatch[1],
+            path: `${currentClass.path}/${methodMatch[1]}`,
+            type: 'blob',
+            complexity: 'low'
+          });
+        }
+        const topDefMatch = line.match(topDefRegex);
+        if (topDefMatch) {
+          results.push({ name: topDefMatch[1], path: `${fileName}/${topDefMatch[1]}`, type: 'blob', complexity: 'low' });
+        }
+      });
+    } else {
+      const classRegex = /class\s+(\w+)/;
+      const funcRegex = /(?:function|const|let|var)\s+(\w+)\s*(?:=|\()/;
+      lines.forEach((line) => {
+        const classMatch = line.match(classRegex);
+        if (classMatch) {
+          results.push({ name: classMatch[1], path: `${fileName}/${classMatch[1]}`, type: 'tree', complexity: 'medium', children: [] });
+        }
+        const funcMatch = line.match(funcRegex);
+        if (funcMatch && !line.includes('class ')) {
+          results.push({ name: funcMatch[1], path: `${fileName}/${funcMatch[1]}`, type: 'blob', complexity: 'low' });
+        }
+      });
+    }
+    return results;
   }
 }

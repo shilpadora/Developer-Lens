@@ -1,14 +1,19 @@
-import React, { useEffect, useRef } from 'react';
+
+import React, { useEffect, useRef, useState } from 'react';
 import * as d3 from 'd3';
-import { FileNode } from '../types';
+import { FileNode, RepoProject } from '../types';
+import { GitHubService } from '../services/githubService';
+import { ParserService } from '../services/parserService';
 
 interface Props {
   data: FileNode[];
+  project?: RepoProject;
   onNodeSelect: (node: FileNode) => void;
 }
 
-const MindMap: React.FC<Props> = ({ data, onNodeSelect }) => {
+const MindMap: React.FC<Props> = ({ data, project, onNodeSelect }) => {
   const svgRef = useRef<SVGSVGElement>(null);
+  const [loadingPath, setLoadingPath] = useState<string | null>(null);
 
   useEffect(() => {
     if (!svgRef.current || !data.length) return;
@@ -25,13 +30,11 @@ const MindMap: React.FC<Props> = ({ data, onNodeSelect }) => {
       .on("zoom", (e) => g.attr("transform", e.transform));
     svg.call(zoom);
 
-    // Initial root setup
-    const rootData: FileNode = { name: "Root", path: "root", type: "tree", complexity: "low", children: data };
+    const rootData: FileNode = { name: project?.name || "Repository", path: "root", type: "tree", complexity: "low", children: data };
     const root = d3.hierarchy<FileNode>(rootData);
 
-    // Collapse all nodes by default (except root children)
     root.descendants().forEach(d => {
-      if (d.depth > 0) {
+      if (d.depth >= 1 && d.children) {
         (d as any)._children = d.children;
         d.children = undefined;
       }
@@ -44,90 +47,80 @@ const MindMap: React.FC<Props> = ({ data, onNodeSelect }) => {
       const nodes = root.descendants();
       const links = root.links();
 
-      // Normalize for fixed-depth
-      nodes.forEach(d => { d.y = d.depth * 280 });
+      nodes.forEach(d => { d.y = d.depth * 240 });
 
-      // Links
-      const link = g.selectAll(".link")
+      const linkSelection = g.selectAll(".link")
         .data(links, (d: any) => d.target.id || (d.target.id = Math.random()));
 
-      link.enter().append("path")
+      linkSelection.enter().append("path")
         .attr("class", "link")
         .attr("fill", "none")
         .attr("stroke", "#1e293b")
         .attr("stroke-width", 1.5)
-        .merge(link as any)
-        .transition().duration(500)
+        .merge(linkSelection as any)
+        .transition().duration(600)
         .attr("d", d3.linkHorizontal<any, any>().x(d => d.y).y(d => d.x) as any);
 
-      link.exit().remove();
+      linkSelection.exit().remove();
 
-      // Nodes
-      const node = g.selectAll(".node")
+      const nodeSelection = g.selectAll(".node")
         .data(nodes, (d: any) => d.id || (d.id = Math.random()));
 
-      const nodeEnter = node.enter().append("g")
+      const nodeEnter = nodeSelection.enter().append("g")
         .attr("class", "node")
         .attr("transform", d => `translate(${source.y},${source.x})`)
-        .on("click", (e, d: any) => {
-          if (d.children) {
-            d._children = d.children;
-            d.children = undefined;
-          } else {
-            d.children = d._children;
-            d._children = undefined;
-          }
-          update(d);
-          onNodeSelect(d.data);
-        })
         .style("cursor", "pointer");
 
-      // Custom Shapes & Notations
+      const nodeUpdate = nodeEnter.merge(nodeSelection as any);
+
+      nodeUpdate.on("click", async (e, d: any) => {
+        e.stopPropagation();
+        onNodeSelect(d.data);
+
+        if (d.data.type === 'tree') {
+          if (d.children) { d._children = d.children; d.children = undefined; }
+          else { d.children = d._children; d._children = undefined; }
+          update(d);
+        } else if (d.data.type === 'blob' && project) {
+          if (d.children || d._children) {
+            if (d.children) { d._children = d.children; d.children = undefined; }
+            else { d.children = d._children; d._children = undefined; }
+            update(d);
+          } else {
+            setLoadingPath(d.data.path);
+            try {
+              const content = await GitHubService.getFile(project.owner, project.name, d.data.path, project.token);
+              const structure = ParserService.parseCodeStructure(content, d.data.name);
+              if (structure.length > 0) {
+                const subRoot = d3.hierarchy({ ...d.data, children: structure });
+                d.children = subRoot.children;
+                if (d.children) d.children.forEach((c: any) => c.parent = d);
+                update(d);
+              }
+            } finally { setLoadingPath(null); }
+          }
+        }
+      });
+
       nodeEnter.each(function(d) {
         const el = d3.select(this);
-        const name = d.data.name;
         const type = d.data.type;
-        const color = d.data.complexity === 'high' ? '#ef4444' : d.data.complexity === 'medium' ? '#f59e0b' : '#10b981';
+        const complexityColor = d.data.complexity === 'high' ? '#ef4444' : d.data.complexity === 'medium' ? '#f59e0b' : '#10b981';
 
         if (type === 'tree') {
-          // Real Folder Notation: Tabbed Folder Path
           el.append("path")
-            .attr("d", "M-14,-10 L-14,10 L14,10 L14,-6 L4,-6 L0,-10 Z")
-            .attr("fill", color)
-            .attr("fill-opacity", 0.1)
-            .attr("stroke", color)
-            .attr("stroke-width", 2);
+            .attr("d", "M-15,-11 L-15,11 L15,11 L15,-6 L4,-6 L0,-11 Z")
+            .attr("fill", complexityColor).attr("fill-opacity", 0.25).attr("stroke", complexityColor).attr("stroke-width", 2);
         } else {
-          // Heuristics for logic types
-          const isClass = /^[A-Z]/.test(name);
-          const isMethod = /^(get|set|on|handle|use|test|_)/.test(name) || name.includes('(');
-
-          if (isClass) {
-            // Hexagon for Classes
-            el.append("path")
-              .attr("d", "M-12,-10 L0,-16 L12,-10 L12,10 L0,16 L-12,10 Z")
-              .attr("fill", color).attr("fill-opacity", 0.1).attr("stroke", color).attr("stroke-width", 2);
-          } else if (isMethod) {
-            // Oval for Functions/Methods
-            el.append("ellipse")
-              .attr("rx", 16).attr("ry", 10)
-              .attr("fill", color).attr("fill-opacity", 0.1).attr("stroke", color).attr("stroke-width", 2);
-          } else {
-            // File Notation: Page icon with dog-ear
-            el.append("path")
-              .attr("d", "M-10,-12 L6,-12 L10,-8 L10,12 L-10,12 Z")
-              .attr("fill", color).attr("fill-opacity", 0.1).attr("stroke", color).attr("stroke-width", 2);
-            // Dog-ear
-            el.append("path")
-              .attr("d", "M6,-12 L6,-8 L10,-8 Z")
-              .attr("fill", color);
-          }
+          el.append("path")
+            .attr("d", "M-10,-13 L6,-13 L10,-9 L10,13 L-10,13 Z")
+            .attr("fill", complexityColor).attr("fill-opacity", 0.25).attr("stroke", complexityColor).attr("stroke-width", 2);
         }
       });
 
       nodeEnter.append("text")
         .attr("dy", "0.31em")
-        .attr("x", d => d._children || d.children ? -22 : 22)
+        .attr("x", d => d._children || d.children ? -25 : 25)
         .attr("text-anchor", d => d._children || d.children ? "end" : "start")
         .text(d => d.data.name)
         .attr("fill", "#f8fafc")
@@ -135,26 +128,27 @@ const MindMap: React.FC<Props> = ({ data, onNodeSelect }) => {
         .style("font-weight", "700")
         .style("text-shadow", "0 2px 4px rgba(0,0,0,0.8)");
 
-      const nodeUpdate = nodeEnter.merge(node as any);
-      nodeUpdate.transition().duration(500)
-        .attr("transform", d => `translate(${d.y},${d.x})`);
-
-      node.exit().remove();
+      nodeUpdate.transition().duration(600).attr("transform", d => `translate(${d.y},${d.x})`);
+      nodeSelection.exit().remove();
     };
 
     update(root as any);
-    svg.call(zoom.transform, d3.zoomIdentity.translate(width/6, height/2).scale(0.85));
+    svg.call(zoom.transform, d3.zoomIdentity.translate(width/8, height/2).scale(0.8));
 
-    const ro = new ResizeObserver(() => {
-      svg.attr("width", container.clientWidth).attr("height", container.clientHeight);
-    });
+    const ro = new ResizeObserver(() => svg.attr("width", container.clientWidth).attr("height", container.clientHeight));
     ro.observe(container);
     return () => ro.disconnect();
-  }, [data]);
+  }, [data, project, onNodeSelect]);
 
   return (
     <div className="w-full h-full bg-slate-950 overflow-hidden relative cursor-grab active:cursor-grabbing">
       <svg ref={svgRef} className="w-full h-full" />
+      {loadingPath && (
+        <div className="absolute top-8 right-8 bg-slate-900/80 border border-emerald-500/20 px-5 py-3 rounded-2xl backdrop-blur-md flex items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
+          <div className="w-4 h-4 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
+          <span className="text-[10px] font-black uppercase tracking-widest text-emerald-500">Deconstructing Logic...</span>
+        </div>
+      )}
     </div>
   );
 };
