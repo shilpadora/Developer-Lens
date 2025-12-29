@@ -13,7 +13,7 @@ export class GitHubService {
   static async fetchTree(owner: string, repo: string, token?: string): Promise<{ tree: FileNode[], defaultBranch: string }> {
     const repoUrl = `https://api.github.com/repos/${owner}/${repo}`;
     const repoRes = await fetch(repoUrl, { headers: this.getHeaders(token) });
-    
+
     if (!repoRes.ok) {
       if (repoRes.status === 404) {
         throw new Error(`GitHub Error 404: Repository not found. If this is a private repo, ensure your API token is valid and has "repo" scope.`);
@@ -27,7 +27,7 @@ export class GitHubService {
     const treeUrl = `https://api.github.com/repos/${owner}/${repo}/git/trees/${defaultBranch}?recursive=1`;
     const treeRes = await fetch(treeUrl, { headers: this.getHeaders(token) });
     const treeData = await treeRes.json();
-    
+
     if (!treeRes.ok) {
       throw new Error(`Tree fetch failed: ${treeData.message || treeRes.status}`);
     }
@@ -41,7 +41,7 @@ export class GitHubService {
 
     const filtered = (tree || []).filter(item => {
       const parts = item.path.split('/');
-      return !parts.some((p: string) => 
+      return !parts.some((p: string) =>
         ['node_modules', '.git', 'dist', 'build', 'venv', '__pycache__', '.next', '.DS_Store'].includes(p)
       );
     });
@@ -81,11 +81,11 @@ export class GitHubService {
   }
 
   static async fetchStats(owner: string, repo: string, branch: string, token?: string): Promise<GitStats> {
-    const fetchWithRetry = async (url: string) => {
+    const fetchWithRetry = async (url: string, retries = 10): Promise<Response> => {
       const res = await fetch(url, { headers: this.getHeaders(token) });
-      if (res.status === 202) {
+      if (res.status === 202 && retries > 0) {
         await new Promise(r => setTimeout(r, 2000));
-        return fetch(url, { headers: this.getHeaders(token) });
+        return fetchWithRetry(url, retries - 1);
       }
       return res;
     };
@@ -109,38 +109,57 @@ export class GitHubService {
     let commitsChart: any[] = [];
     let monthlyActivity: any[] = [];
 
-    if (activityRes.ok) {
+    if (activityRes.status === 200) {
       const data = await activityRes.json();
-      if (Array.isArray(data)) {
-        commitsChart = data.map((w: any) => ({
-          date: new Date(w.week * 1000).toLocaleDateString(),
-          count: w.total
-        })).slice(-12);
-
+      if (Array.isArray(data) && data.length > 0) {
         const now = Date.now() / 1000;
+
+        // 1. Weekly activity for small chart (last 12 weeks)
+        commitsChart = data.slice(-12).map((w: any) => ({
+          date: new Date(w.week * 1000).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+          count: w.total
+        }));
+
+        // 2. Metrics for periods
         data.forEach((w: any) => {
           const age = now - w.week;
+          // Rolling windows for summaries
           if (age < 86400 * 7) periods.thisWeek.commits += w.total;
           if (age < 86400 * 30) periods.thisMonth.commits += w.total;
           if (age < 86400 * 365) {
             periods.thisYear.commits += w.total;
             periods.total.commits += w.total;
           }
+          // Today remains precise from daily data
           if (age < 86400 * 7 && w.days) {
-            periods.today.commits = w.days[new Date().getDay()] || 0;
+            const dayOfWeek = (new Date()).getDay();
+            periods.today.commits = w.days[dayOfWeek] || 0;
           }
         });
 
-        const monthMap: Record<string, number> = {};
+        // 3. Chronological monthly activity for Velocity Graph
+        // Aggregate by YYYY-MM to ensure distinct months are kept separate and sorted
+        const monthMap = new Map<string, { label: string, commits: number }>();
+
         data.forEach((w: any) => {
-          const m = new Date(w.week * 1000).toLocaleString('default', { month: 'short' });
-          monthMap[m] = (monthMap[m] || 0) + w.total;
+          const date = new Date(w.week * 1000);
+          const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+          const monthLabel = date.toLocaleString('default', { month: 'short' });
+          if (!monthMap.has(monthKey)) monthMap.set(monthKey, { label: monthLabel, commits: 0 });
+          monthMap.get(monthKey)!.commits += w.total;
         });
-        monthlyActivity = Object.entries(monthMap).map(([month, commits]) => ({ month, commits }));
+
+        // Sort keys to ensure chronological order
+        monthlyActivity = Array.from(monthMap.keys())
+          .sort()
+          .map(key => ({
+            month: monthMap.get(key)!.label,
+            commits: monthMap.get(key)!.commits
+          }));
       }
     }
 
-    if (contributorsRes.ok) {
+    if (contributorsRes.status === 200) {
       const data = await contributorsRes.json();
       if (Array.isArray(data)) {
         const now = Date.now() / 1000;
@@ -148,6 +167,9 @@ export class GitHubService {
           const author = c.author?.login || 'unknown';
           c.weeks?.forEach((w: any) => {
             const age = now - w.w;
+            // Commits must be > 0 to be meaningful for these metrics
+            if ((w.c || 0) <= 0 && (w.a || 0) <= 0 && (w.d || 0) <= 0) return;
+
             const updateMetric = (m: PeriodicMetric) => {
               m.additions += (w.a || 0);
               m.deletions += (w.d || 0);
@@ -162,14 +184,19 @@ export class GitHubService {
               cont.commits += (w.c || 0);
             };
 
-            if (age < 86400 * 7) updateMetric(periods.thisWeek);
-            if (age < 86400 * 30) updateMetric(periods.thisMonth);
-            if (age < 86400 * 365) updateMetric(periods.thisYear);
+            // Inclusive rolling windows for contributors (weekly granularity)
+            // We use 9 days for "This Week" to ensure the Sunday boundary doesn't hide very recent activity
+            if (age < 86400 * 9) {
+              updateMetric(periods.thisWeek);
+              updateMetric(periods.today);
+            }
+            if (age < 86400 * 35) updateMetric(periods.thisMonth);
+            if (age < 86400 * 370) updateMetric(periods.thisYear);
             if (age >= 86400 * 365 && age < 86400 * 730) updateMetric(periods.prevYear);
             updateMetric(periods.total);
           });
         });
-        
+
         Object.values(periods).forEach(p => {
           p.contributors.sort((a, b) => b.commits - a.commits);
         });
@@ -187,11 +214,11 @@ export class GitHubService {
       });
     }
 
-    return { 
-      commits: commitsChart, 
-      extensions, 
-      monthlyActivity, 
-      periods 
+    return {
+      commits: commitsChart,
+      extensions,
+      monthlyActivity,
+      periods
     };
   }
 
@@ -199,18 +226,18 @@ export class GitHubService {
     try {
       // Correct path encoding for GitHub API
       const encodedPath = path.split('/').map(seg => encodeURIComponent(seg)).join('/');
-      const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${encodedPath}`, { 
-        headers: this.getHeaders(token) 
+      const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${encodedPath}`, {
+        headers: this.getHeaders(token)
       });
-      
+
       if (!res.ok) {
         console.warn(`GitHub File Error: ${res.status} for ${path}`);
         return '';
       }
-      
+
       const data = await res.json();
       if (!data.content) return '';
-      
+
       // Robust base64 to UTF-8 decoding
       const binary = atob(data.content.replace(/\s/g, ''));
       const bytes = new Uint8Array(binary.length);
@@ -218,9 +245,9 @@ export class GitHubService {
         bytes[i] = binary.charCodeAt(i);
       }
       return new TextDecoder().decode(bytes);
-    } catch (e) { 
+    } catch (e) {
       console.error("GitHub Retrieval Error:", e);
-      return ''; 
+      return '';
     }
   }
 }
