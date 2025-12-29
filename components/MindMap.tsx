@@ -8,10 +8,11 @@ import { ParserService } from '../services/parserService';
 interface Props {
   data: FileNode[];
   project?: RepoProject;
+  globalToken?: string;
   onNodeSelect: (node: FileNode) => void;
 }
 
-const MindMap: React.FC<Props> = ({ data, project, onNodeSelect }) => {
+const MindMap: React.FC<Props> = ({ data, project, globalToken, onNodeSelect }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const [loadingPath, setLoadingPath] = useState<string | null>(null);
 
@@ -23,7 +24,7 @@ const MindMap: React.FC<Props> = ({ data, project, onNodeSelect }) => {
 
     const svg = d3.select(svgRef.current);
     svg.selectAll("*").remove();
-    
+
     const g = svg.append("g");
     const zoom = d3.zoom<SVGSVGElement, unknown>()
       .scaleExtent([0.05, 10])
@@ -77,12 +78,14 @@ const MindMap: React.FC<Props> = ({ data, project, onNodeSelect }) => {
         e.stopPropagation();
         onNodeSelect(d.data);
 
-        // Files or Folders can expand
-        if (d.data.kind === 'folder' || d.data.kind === 'class') {
+        // Folders, Classes, and Files can expand
+        const kind = d.data.kind || (d.data.type === 'tree' ? 'folder' : 'file');
+
+        if (kind === 'folder' || kind === 'class') {
           if (d.children) { d._children = d.children; d.children = undefined; }
           else { d.children = d._children; d._children = undefined; }
           update(d);
-        } else if (d.data.kind === 'file' && project) {
+        } else if (kind === 'file' && project) {
           if (d.children || d._children) {
             if (d.children) { d._children = d.children; d.children = undefined; }
             else { d.children = d._children; d._children = undefined; }
@@ -90,12 +93,23 @@ const MindMap: React.FC<Props> = ({ data, project, onNodeSelect }) => {
           } else {
             setLoadingPath(d.data.path);
             try {
-              const content = await GitHubService.getFile(project.owner, project.name, d.data.path, project.token);
+              const tokenToUse = project.token || globalToken;
+              const content = await GitHubService.getFile(project.owner, project.name, d.data.path, tokenToUse);
               const structure = ParserService.parseCodeStructure(content, d.data.name);
               if (structure.length > 0) {
                 const subRoot = d3.hierarchy({ ...d.data, children: structure });
                 d.children = subRoot.children;
-                if (d.children) d.children.forEach((c: any) => c.parent = d);
+                if (d.children) {
+                  const updateDepth = (node: any, depth: number) => {
+                    node.depth = depth;
+                    if (node.children) node.children.forEach((c: any) => updateDepth(c, depth + 1));
+                    if (node._children) node._children.forEach((c: any) => updateDepth(c, depth + 1));
+                  };
+                  d.children.forEach((c: any) => {
+                    c.parent = d;
+                    updateDepth(c, d.depth + 1);
+                  });
+                }
                 update(d);
               }
             } finally { setLoadingPath(null); }
@@ -103,7 +117,7 @@ const MindMap: React.FC<Props> = ({ data, project, onNodeSelect }) => {
         }
       });
 
-      nodeEnter.each(function(d) {
+      nodeEnter.each(function (d) {
         const el = d3.select(this);
         const kind = d.data.kind || (d.data.type === 'tree' ? 'folder' : 'file');
         const complexityColor = d.data.complexity === 'high' ? '#ef4444' : d.data.complexity === 'medium' ? '#f59e0b' : '#10b981';
@@ -131,8 +145,8 @@ const MindMap: React.FC<Props> = ({ data, project, onNodeSelect }) => {
 
       nodeEnter.append("text")
         .attr("dy", "0.31em")
-        .attr("x", d => d._children || d.children ? -25 : 25)
-        .attr("text-anchor", d => d._children || d.children ? "end" : "start")
+        .attr("x", 25)
+        .attr("text-anchor", "start")
         .text(d => d.data.name)
         .attr("fill", "#f8fafc")
         .style("font-size", "11px")
@@ -144,7 +158,7 @@ const MindMap: React.FC<Props> = ({ data, project, onNodeSelect }) => {
     };
 
     update(root as any);
-    svg.call(zoom.transform, d3.zoomIdentity.translate(width/8, height/2).scale(0.8));
+    svg.call(zoom.transform, d3.zoomIdentity.translate(width / 8, height / 2).scale(0.8));
 
     const ro = new ResizeObserver(() => svg.attr("width", container.clientWidth).attr("height", container.clientHeight));
     ro.observe(container);

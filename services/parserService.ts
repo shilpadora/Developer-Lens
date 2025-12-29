@@ -35,10 +35,10 @@ export class ParserService {
           const isPK = decorators.includes('@id');
           const isUnique = decorators.includes('@unique');
 
-          if (/[A-Z]/.test(fType[0]) && !['String','Int','Boolean','DateTime','Float','Json','Decimal'].includes(fType)) {
+          if (/[A-Z]/.test(fType[0]) && !['String', 'Int', 'Boolean', 'DateTime', 'Float', 'Json', 'Decimal'].includes(fType)) {
             const relNameMatch = /@relation\(\s*name:\s*['"](\w+)['"]/.exec(decorators);
-            relations.push({ 
-              target: fType, 
+            relations.push({
+              target: fType,
               type: isArray ? 'one-to-many' : 'one-to-one',
               name: relNameMatch ? relNameMatch[1] : undefined
             });
@@ -77,9 +77,9 @@ export class ParserService {
             const targetMatch = /['"](\w+)['"]|(\w+)/.exec(args);
             const target = targetMatch ? (targetMatch[1] || targetMatch[2]) : 'Unknown';
             const relatedMatch = /related_name\s*=\s*['"](\w+)['"]/.exec(args);
-            
-            relations.push({ 
-              target, 
+
+            relations.push({
+              target,
               type: fType === 'ForeignKey' ? 'one-to-many' : fType === 'ManyToManyField' ? 'many-to-many' : 'one-to-one',
               name: relatedMatch ? relatedMatch[1] : undefined
             });
@@ -87,7 +87,7 @@ export class ParserService {
             fields.push({ name: fName, type: fType, isPrimaryKey: isPK, isUnique });
           }
         }
-        
+
         if (line.includes('indexes =') || line.includes('unique_together =')) {
           indexes.push(line.trim());
         }
@@ -100,11 +100,11 @@ export class ParserService {
   static parseCodeStructure(content: string, fileName: string): FileNode[] {
     const results: FileNode[] = [];
     const lines = content.split('\n');
-    const isPython = fileName.endsWith('.py');
-    
-    if (isPython) {
+    const ext = fileName.split('.').pop()?.toLowerCase() || '';
+
+    if (ext === 'py') {
       const classRegex = /^class\s+(\w+)/;
-      const defRegex = /^\s{4}def\s+(\w+)/;
+      const methodRegex = /^\s{4}def\s+(\w+)/;
       const topDefRegex = /^def\s+(\w+)/;
       let currentClass: FileNode | null = null;
 
@@ -120,8 +120,10 @@ export class ParserService {
             children: []
           };
           results.push(currentClass);
+          return;
         }
-        const methodMatch = line.match(defRegex);
+
+        const methodMatch = line.match(methodRegex);
         if (methodMatch && currentClass) {
           currentClass.children?.push({
             name: methodMatch[1],
@@ -130,26 +132,89 @@ export class ParserService {
             kind: 'function',
             complexity: 'low'
           });
+          return;
         }
+
         const topDefMatch = line.match(topDefRegex);
         if (topDefMatch) {
-          results.push({ name: topDefMatch[1], path: `${fileName}/${topDefMatch[1]}`, type: 'blob', kind: 'function', complexity: 'low' });
+          results.push({
+            name: topDefMatch[1],
+            path: `${fileName}/${topDefMatch[1]}`,
+            type: 'blob',
+            kind: 'function',
+            complexity: 'low'
+          });
         }
       });
-    } else {
-      const classRegex = /class\s+(\w+)/;
-      const funcRegex = /(?:function|const|let|var)\s+(\w+)\s*(?:=|\()/;
+    } else if (['js', 'jsx', 'ts', 'tsx'].includes(ext)) {
+      // Improved regex for ES6 classes, functions, and arrow functions
+      const classRegex = /^(?:export\s+)?class\s+(\w+)/;
+      const funcRegex = /^(?:export\s+)?(?:async\s+)?function\s+(\w+)/;
+      const arrowFuncRegex = /^(?:export\s+)?(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s+)?(?:\(.*?\)|(\w+))\s*=>/;
+      const methodRegex = /^\s{2}(?:async\s+)?(\w+)\s*\(.*?\)\s*\{/; // Class methods (2-space indent)
+
+      let currentClass: FileNode | null = null;
+
       lines.forEach((line) => {
+        // Classes
         const classMatch = line.match(classRegex);
         if (classMatch) {
-          results.push({ name: classMatch[1], path: `${fileName}/${classMatch[1]}`, type: 'tree', kind: 'class', complexity: 'medium', children: [] });
+          currentClass = {
+            name: classMatch[1],
+            path: `${fileName}/${classMatch[1]}`,
+            type: 'tree',
+            kind: 'class',
+            complexity: 'medium',
+            children: []
+          };
+          results.push(currentClass);
+          return;
         }
+
+        // Class methods
+        const methMatch = line.match(methodRegex);
+        if (methMatch && currentClass) {
+          const name = methMatch[1];
+          if (!['if', 'for', 'while', 'switch', 'catch'].includes(name)) {
+            currentClass.children?.push({
+              name,
+              path: `${currentClass.path}/${name}`,
+              type: 'blob',
+              kind: 'function',
+              complexity: 'low'
+            });
+          }
+          return;
+        }
+
+        // Top level functions
         const funcMatch = line.match(funcRegex);
-        if (funcMatch && !line.includes('class ')) {
-          results.push({ name: funcMatch[1], path: `${fileName}/${funcMatch[1]}`, type: 'blob', kind: 'function', complexity: 'low' });
+        if (funcMatch) {
+          results.push({
+            name: funcMatch[1],
+            path: `${fileName}/${funcMatch[1]}`,
+            type: 'blob',
+            kind: 'function',
+            complexity: 'low'
+          });
+          return;
+        }
+
+        // Arrow functions
+        const arrowMatch = line.match(arrowFuncRegex);
+        if (arrowMatch) {
+          results.push({
+            name: arrowMatch[1],
+            path: `${fileName}/${arrowMatch[1]}`,
+            type: 'blob',
+            kind: 'function',
+            complexity: 'low'
+          });
+          return;
         }
       });
     }
+
     return results;
   }
 }
